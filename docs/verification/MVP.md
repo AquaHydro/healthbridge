@@ -90,3 +90,25 @@
 - [Cloudflare MCP Streamable HTTP](https://developers.cloudflare.com/agents/model-context-protocol/protocol/transport/)
 - [Codex MCP 配置](https://learn.chatgpt.com/docs/extend/mcp)
 - [Claude Code MCP 配置](https://code.claude.com/docs/en/mcp)
+
+## Token 初始化与 Agent 快捷复制增量（2026-11-03）
+
+- 初始化页可使用 `SecRandomCopyBytes` 生成两枚独立的 256 位 Token。整组草稿写入独立 Keychain 条目，关闭后可恢复；生成或取消不会改变正在使用的上传 Token。
+- 用户分别复制到 Cloudflare Secrets 并部署后，在 App 测试写入连接和可选的 MCP 只读初始化，成功后才启用。没有新增未认证的服务端初始化接口，没有轮换现有部署的 Secrets。
+- 沿用旧版写入 Token 的 Keychain service/account；MCP Token 使用独立 service，并以规范化服务器 origin 为 account。生成草稿、写入和只读凭据互相分离。
+- “连接 AI Agent”支持导入并验证 MCP Token、复制地址和只读 Token、复制 Codex TOML / Claude Code JSON / 通用 JSON。预览始终使用占位符，是否将只读 Token 放进剪贴板由用户选项控制，绝不导出写入 Token。
+- 复制设置 2 分钟剪贴板有效期，允许通用剪贴板。断开连接清除当前服务器在 App 中保存的写入和只读 Token，保留独立的未使用生成草稿。
+- 测试发现同一表单中两个保密输入框会出现相同值联动，已将可选只读 Token 改成单独填写弹窗；复测了原来的非法地址提示及“继续”不可用状态。
+
+验证结果：
+
+- **22 项 XCTest 全部通过**，其中新增 6 项凭据逻辑测试和 2 项用户流程测试；覆盖安全生成、Keychain 恢复/隔离/删除、输入校验、配置内容、JSON/SSE 初始化回复、复制、草稿恢复与只读导入。
+- 使用 App 同一份 `ServerAPI.swift` / `MCPConnection.swift` 请求真实部署，MCP Token 初始化成功，写入 Token 被 MCP 入口拒绝；不调用健康查询工具。该项为原生 Swift 网络代码验证，不冒充真机 UI 验收。
+- App 生成的合成凭据配置通过 Python `tomllib` 和 JSON 解析验证，包含精确的只读 Authorization 值；修复了 JSONEncoder 默认斜杠转义不适用于 TOML 的问题。
+- 真机自动签名构建、代码签名校验、覆盖安装和启动成功，保留原数据与上传凭据。
+- UI 自动化的网络回复和凭据均为合成数据，使用独立测试 Keychain namespace；网络替身只编译在 Debug 模拟器中。
+- 模拟器在部分键盘/导航切换时仍报告没有源码定位的 `Invalid frame dimension` 警告。相关交互测试通过，实际截图未见负尺寸或布局溢出；未将这些告警描述为已修复。
+
+界面证据：[生成 Token](screenshots/15-token-generation.png)、[使用生成草稿](screenshots/16-generated-connection.png)、[保存只读 Token](screenshots/17-agent-token.png)、[复制完整配置](screenshots/18-agent-copy.png)。截图不含可用于真实服务的凭据。
+
+用户已在安装后的真机 Agent 页导入原 MCP Token，并明确确认“验证保存成功，复制正常”。该项为用户操作验收，未读取或输出手机中的 Token；现有服务器 Secrets 未轮换。

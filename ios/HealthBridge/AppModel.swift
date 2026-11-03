@@ -37,6 +37,12 @@ import UIKit
       if args.contains("--ui-test") {
         preferences = Preferences()
         preferences.onboarded = !args.contains("--ui-intro")
+        if args.contains("--ui-agent") {
+          preferences.server = "https://example.invalid"
+          selectedTab = 2
+          try? Keychain.save("synthetic-writer-test")
+          try? Keychain.deleteMCP(for: URL(string: preferences.server)!)
+        }
         if args.contains("--ui-fixtures") {
           for type in HealthType.allCases {
             overview[type] = (0..<30).map { index in
@@ -81,8 +87,10 @@ import UIKit
   func api() throws -> ServerAPI {
     ServerAPI(base: try ServerAPI.normalizedURL(preferences.server), token: try Keychain.read())
   }
-  func connect(url: URL, token: String, status: ServerStatus) async throws {
+  func connect(url: URL, token: String, status: ServerStatus, mcpToken: String? = nil) async throws
+  {
     await stopSync()
+    if let mcpToken { try Keychain.saveMCP(mcpToken, for: url) }
     try Keychain.save(token)
     let changed =
       preferences.server.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
@@ -95,6 +103,7 @@ import UIKit
     }
     serverStatus = status
     save()
+    try? Keychain.clearPendingPair(matching: token)
   }
   func grantConsent() {
     preferences.authorizationPending = true
@@ -113,6 +122,9 @@ import UIKit
     save()
     await stopSync()
     await configureObservers()
+    if let url = try? ServerAPI.normalizedURL(preferences.server) {
+      try? Keychain.deleteMCP(for: url)
+    }
     Keychain.delete()
     preferences.server = ""
     resetAnchors()

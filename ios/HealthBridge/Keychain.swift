@@ -1,37 +1,44 @@
 import Foundation
-import Security
 
 enum Keychain {
-  private static let service = "app.yiliang.healthbridge.ingest"
-  private static var query: [String: Any] {
-    [
-      kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
-      kSecAttrAccount as String: "ingest",
-    ]
+  private static var suffix: String {
+    #if DEBUG && targetEnvironment(simulator)
+      ProcessInfo.processInfo.arguments.contains("--ui-test") ? ".ui-tests" : ""
+    #else
+      ""
+    #endif
+  }
+  // Keep the original service/account so existing installed apps retain their upload token.
+  private static var ingest: CredentialStore {
+    CredentialStore(service: "app.yiliang.healthbridge.ingest" + suffix)
+  }
+  private static var mcp: CredentialStore {
+    CredentialStore(service: "app.yiliang.healthbridge.mcp" + suffix)
+  }
+  private static var draft: CredentialStore {
+    CredentialStore(service: "app.yiliang.healthbridge.setup" + suffix)
   }
   static func read() throws -> String {
-    var q = query
-    q[kSecReturnData as String] = true
-    q[kSecMatchLimit as String] = kSecMatchLimitOne
-    var value: CFTypeRef?
-    guard SecItemCopyMatching(q as CFDictionary, &value) == errSecSuccess,
-      let data = value as? Data, let token = String(data: data, encoding: .utf8)
+    guard let data = try ingest.read("ingest"), let token = String(data: data, encoding: .utf8)
     else { throw BridgeError.keychain }
     return token
   }
-  static func save(_ token: String) throws {
-    let attrs: [String: Any] = [
-      kSecValueData as String: Data(token.utf8),
-      kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
-    ]
-    let status = SecItemUpdate(query as CFDictionary, attrs as CFDictionary)
-    if status == errSecItemNotFound {
-      var q = query
-      q.merge(attrs) { _, new in new }
-      guard SecItemAdd(q as CFDictionary, nil) == errSecSuccess else { throw BridgeError.keychain }
-    } else if status != errSecSuccess {
-      throw BridgeError.keychain
-    }
+  static func save(_ token: String) throws { try ingest.save(Data(token.utf8), account: "ingest") }
+  static func delete() { try? ingest.delete("ingest") }
+  static func readMCP(for url: URL) throws -> String? {
+    try mcp.read(CredentialRules.origin(url)).flatMap { String(data: $0, encoding: .utf8) }
   }
-  static func delete() { SecItemDelete(query as CFDictionary) }
+  static func saveMCP(_ token: String, for url: URL) throws {
+    try mcp.save(Data(token.utf8), account: CredentialRules.origin(url))
+  }
+  static func deleteMCP(for url: URL) throws { try mcp.delete(CredentialRules.origin(url)) }
+  static func pendingPair() throws -> TokenPair? {
+    try draft.read("pending").map { try JSONDecoder().decode(TokenPair.self, from: $0) }
+  }
+  static func savePendingPair(_ pair: TokenPair) throws {
+    try draft.save(JSONEncoder().encode(pair), account: "pending")
+  }
+  static func clearPendingPair(matching token: String) throws {
+    if try pendingPair()?.ingest == token { try draft.delete("pending") }
+  }
 }

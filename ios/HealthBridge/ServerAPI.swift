@@ -26,7 +26,7 @@ struct ServerAPI {
     request.timeoutInterval = 15
     request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-    let config = URLSessionConfiguration.ephemeral
+    let config = Self.sessionConfiguration()
     config.timeoutIntervalForResource = 20
     config.urlCache = nil
     let session = URLSession(configuration: config, delegate: NoRedirect(), delegateQueue: nil)
@@ -52,5 +52,17 @@ struct ServerAPI {
     struct Receipt: Decodable { let ok: Bool }
     let receipt = try await request("v1/data", method: "DELETE", type: Receipt.self)
     guard receipt.ok else { throw BridgeError.invalidReceipt }
+  }
+}
+
+extension ServerAPI {
+  static func sessionConfiguration() -> URLSessionConfiguration {
+    let config = URLSessionConfiguration.ephemeral
+    #if DEBUG && targetEnvironment(simulator)
+      if ProcessInfo.processInfo.arguments.contains("--ui-token-network") {
+        config.protocolClasses = [TokenSetupTestProtocol.self]
+      }
+    #endif
+    return config
   }
 }

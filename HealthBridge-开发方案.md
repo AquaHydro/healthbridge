@@ -113,7 +113,7 @@ healthbridge/
 | Secret | 持有方 | 权限 |
 |---|---|---|
 | `INGEST_TOKEN` | iOS App（Keychain） | 写入、删除、连通性测试 |
-| `MCP_TOKEN` | Agent 配置 | 只读查询 |
+| `MCP_TOKEN` | Agent 配置；App 可按服务器存入独立 Keychain 条目，用于主动复制 | 只读查询 |
 
 Agent 侧的 Token 泄露时，最多被读走数据，不能篡改或删除；App 侧同理。两个 Token 都通过 `wrangler secret` 设置，比较时用 `crypto.subtle.timingSafeEqual`。
 
@@ -326,3 +326,7 @@ CREATE TABLE meta (                -- 同步状态等少量键值
 - 开源许可。
 - 隐私政策的托管位置（GitHub Pages / Cloudflare Pages）。
 - 是否首发即上中国大陆区（取决于备案进度）。
+
+### 2026-11-03 Token 初始化补充（用户确认）
+
+客户端可用系统安全随机数生成两枚独立 256 位 Token，作为 Keychain 草稿保存。用户将同值配置到 Cloudflare Secrets 并部署后，测试成功才启用连接。已有部署可导入原 Token。Agent 页面支持保存、验证和快捷复制 MCP 只读 Token 及客户端配置，预览不暴露凭据，写入 Token 不进入 Agent 配置。App 不保存 Cloudflare 管理凭据，不自动更改远程 Secrets。

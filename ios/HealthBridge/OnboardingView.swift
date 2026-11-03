@@ -68,6 +68,12 @@ struct ConnectionView: View {
   var onboarding = false
   @State private var address = ""
   @State private var token = ""
+  @State private var mcpToken = ""
+  private enum Field: Hashable { case address, ingest }
+  @FocusState private var editing: Field?
+  @State private var showGeneration = false
+  @State private var showReadToken = false
+  @State private var loaded = false
   @State private var result: ServerStatus?
   @State private var message: String?
   @State private var busy = false
@@ -75,16 +81,36 @@ struct ConnectionView: View {
   var body: some View {
     Form {
       Section { Text("填写你自己的服务器地址和写入 Token。测试连接不会发送健康数据。").foregroundStyle(.secondary) }
+      Section {
+        Button("生成新 Token") { showGeneration = true }
+        Text("首次部署可在这里生成；已有服务器请填写现有 Token。生成后需配置到 Cloudflare 才会生效。").font(.footnote)
+          .foregroundStyle(.secondary)
+      }
       Section("服务器") {
         TextField("https://你的服务.workers.dev", text: $address).textInputAutocapitalization(.never)
-          .autocorrectionDisabled().keyboardType(.URL).accessibilityIdentifier("serverURL")
+          .autocorrectionDisabled().keyboardType(.URL).focused($editing, equals: .address)
+          .accessibilityIdentifier(
+            "serverURL")
         SecureField("INGEST_TOKEN", text: $token).textInputAutocapitalization(.never)
-          .autocorrectionDisabled().accessibilityIdentifier("ingestToken")
+          .autocorrectionDisabled().textContentType(.init(rawValue: "")).focused(
+            $editing, equals: .ingest
+          ).accessibilityIdentifier("ingestToken")
         Button {
           if let value = UIPasteboard.general.string { token = value }
         } label: {
           Label("粘贴 Token", systemImage: "doc.on.clipboard")
         }
+      }
+      Section {
+        Button(mcpToken.isEmpty ? "添加只读 Token（选填）" : "更换只读 Token") { showReadToken = true }
+        if !mcpToken.isEmpty {
+          Label("只读 Token 已填写，等待连接验证", systemImage: "key")
+          Button("暂不填写只读 Token") { mcpToken = "" }
+        }
+      } header: {
+        Text("Agent 只读 Token")
+      } footer: {
+        Text("填写后会同时验证并保存，之后可在“连接 AI Agent”页快捷复制。也可稍后导入。")
       }
       Section {
         Button {
@@ -108,14 +134,42 @@ struct ConnectionView: View {
         Button("继续") { Task { await next() } }.disabled(result == nil || busy)
         NavigationLink("如何部署服务器") { DeploymentHelpView() }
       } footer: {
-        Text("Token 只保存在本机钥匙串。请使用 INGEST_TOKEN，AI Agent 的 MCP_TOKEN 不在 App 中保存。")
+        Text("两种 Token 分开保存在本机钥匙串。连接通过后才启用；生成草稿不会替换现有连接。")
       }
     }.navigationTitle("连接服务器")
       .onAppear {
+        guard !loaded else { return }
+        loaded = true
         address = model.preferences.server
-        if !address.isEmpty { token = (try? Keychain.read()) ?? "" }
+        if !address.isEmpty {
+          token = (try? Keychain.read()) ?? ""
+          if let url = try? ServerAPI.normalizedURL(address) {
+            mcpToken = (try? Keychain.readMCP(for: url)) ?? ""
+          }
+        }
       }
-      .onChange(of: address) { _, _ in result = nil }.onChange(of: token) { _, _ in result = nil }
+      .onChange(of: address) { _, _ in result = nil }
+      .onChange(of: token) { _, _ in result = nil }
+      .onChange(of: mcpToken) { _, _ in result = nil }
+      .sheet(isPresented: $showGeneration) {
+        TokenSetupView { pair in
+          token = pair.ingest
+          mcpToken = pair.mcp
+          result = nil
+        }
+      }
+      .sheet(isPresented: $showReadToken) {
+        ReadTokenInputView(initial: mcpToken) {
+          mcpToken = $0
+          result = nil
+        }
+      }
+      .toolbar {
+        ToolbarItemGroup(placement: .keyboard) {
+          Spacer()
+          Button("完成") { editing = nil }
+        }
+      }
       .navigationDestination(isPresented: $advance) { ConsentView(onboarding: onboarding) }
       .toolbar { if onboarding { NavigationLink("暂不连接") { TypeSelectionView(onboarding: true) } } }
   }
@@ -125,18 +179,28 @@ struct ConnectionView: View {
     message = nil
     let submittedAddress = address
     let submittedToken = token
+    let submittedMCP = mcpToken
     defer { busy = false }
     do {
+      let writeToken = try CredentialRules.token(submittedToken)
+      let readToken = submittedMCP.isEmpty ? nil : try CredentialRules.token(submittedMCP)
+      if let readToken, readToken == writeToken { throw CredentialError.sameToken }
+      let base = try ServerAPI.normalizedURL(submittedAddress)
       let status = try await ServerAPI(
-        base: ServerAPI.normalizedURL(submittedAddress), token: submittedToken
+        base: base, token: writeToken
       ).ping()
-      if address == submittedAddress && token == submittedToken { result = status }
-    } catch { message = (error as? BridgeError)?.localizedDescription ?? "暂时无法连接，请检查地址与网络后重试。" }
+      if let readToken { try await ServerAPI(base: base, token: readToken).verifyMCP() }
+      if address == submittedAddress && token == submittedToken && mcpToken == submittedMCP {
+        result = status
+      }
+    } catch { message = (error as? LocalizedError)?.errorDescription ?? "暂时无法连接，请检查地址与网络后重试。" }
   }
   private func next() async {
     guard let result else { return }
     do {
-      try await model.connect(url: ServerAPI.normalizedURL(address), token: token, status: result)
+      try await model.connect(
+        url: ServerAPI.normalizedURL(address), token: CredentialRules.token(token), status: result,
+        mcpToken: mcpToken.isEmpty ? nil : CredentialRules.token(mcpToken))
       if model.preferences.canSync && !onboarding {
         await model.configureObservers()
         model.startSync()

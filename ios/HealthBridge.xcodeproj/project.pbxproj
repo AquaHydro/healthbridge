@@ -8,18 +8,24 @@
 
 /* Begin PBXBuildFile section */
 		226298BED5AA92F9A1A74CA2 /* ContractTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12ADDC82C73CA2F381094D92 /* ContractTests.swift */; };
+		3048D9B2BF96148B46F343A8 /* CredentialTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E5E3EFEB2BBEE7E08F78EA4 /* CredentialTests.swift */; };
+		474AFB9564DF6F8AAA5661A0 /* MCPConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 533F45008B76697A7CDC9DB2 /* MCPConnection.swift */; };
+		4F40CB5E00E4EE863B08F9A4 /* TokenSetupTestProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6CD17CD29D5516DCD112AF1B /* TokenSetupTestProtocol.swift */; };
 		5F47B19481BF70B1BA134E85 /* MainView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D790C92C669D539B51B9C23C /* MainView.swift */; };
 		7510ED65F56C78A562B7A7D6 /* ServerAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = D37E3E35AC931FAF3222564B /* ServerAPI.swift */; };
 		762A1BC5B0DEA9DA09859715 /* PageTransfer.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA8E1272016F4F8EDE6E8E5A /* PageTransfer.swift */; };
 		7D0C0D164AA4702AA60F63E7 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8AEC3EBA6B25D4AA14FA24D4 /* AppModel.swift */; };
 		8D84A0E8A3FF355C1ACE12F9 /* CheckpointTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 585D1709C31DB30E6A4A10D0 /* CheckpointTests.swift */; };
 		8DD07C66176EC0FDC6E2D27B /* FlowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F5985A9F5043FD798639DC3 /* FlowTests.swift */; };
+		984AF0AB042A6CE9C71550F3 /* AgentHelpView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A3ECEB18F5644AA05D1EEC4 /* AgentHelpView.swift */; };
 		98517E12DC52DA5D58D16813 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBD49A5A2BDB6A19EE2735BC /* Models.swift */; };
 		9BDF446C96281FFC0DF8A950 /* HealthBridgeApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD20CB6D9ECD8580A75AC516 /* HealthBridgeApp.swift */; };
 		9D2ED4B488A40DB6B4E65807 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E5ECF2C2AE375EFAC2DFCA8 /* OnboardingView.swift */; };
 		B6BF3EDB1FE61364FF742F40 /* Keychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = F808E2F673832911E8358643 /* Keychain.swift */; };
 		BD9F58065359EB1A3D986B42 /* HealthStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54FD19CB35CAFFC8D0E5DAE0 /* HealthStore.swift */; };
+		C93BB32CD1DFC573DCAE861C /* Credentials.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7192E7F9B3523FE022BC86DD /* Credentials.swift */; };
 		D37DD05FABEF863CBA50013A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 0DFBD63A484DA3F649D6B0E6 /* Assets.xcassets */; };
+		F8652BA7BCBE0C33FF1F1A72 /* TokenSetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 274924FCEFA409B3C649CA7D /* TokenSetupView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -44,11 +50,17 @@
 		09B31AEF38898A107BF7BBB9 /* HealthBridgeUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = HealthBridgeUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		0DFBD63A484DA3F649D6B0E6 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		12ADDC82C73CA2F381094D92 /* ContractTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContractTests.swift; sourceTree = "<group>"; };
+		274924FCEFA409B3C649CA7D /* TokenSetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TokenSetupView.swift; sourceTree = "<group>"; };
+		2E5E3EFEB2BBEE7E08F78EA4 /* CredentialTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CredentialTests.swift; sourceTree = "<group>"; };
 		2E5ECF2C2AE375EFAC2DFCA8 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		31A759280715F6FBBAB133C7 /* HealthBridge.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = HealthBridge.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		42C7967B77CD3CD676D07F8A /* HealthBridgeTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = HealthBridgeTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		533F45008B76697A7CDC9DB2 /* MCPConnection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPConnection.swift; sourceTree = "<group>"; };
 		54FD19CB35CAFFC8D0E5DAE0 /* HealthStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthStore.swift; sourceTree = "<group>"; };
 		585D1709C31DB30E6A4A10D0 /* CheckpointTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CheckpointTests.swift; sourceTree = "<group>"; };
+		5A3ECEB18F5644AA05D1EEC4 /* AgentHelpView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentHelpView.swift; sourceTree = "<group>"; };
+		6CD17CD29D5516DCD112AF1B /* TokenSetupTestProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TokenSetupTestProtocol.swift; sourceTree = "<group>"; };
+		7192E7F9B3523FE022BC86DD /* Credentials.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Credentials.swift; sourceTree = "<group>"; };
 		8AEC3EBA6B25D4AA14FA24D4 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		9F5985A9F5043FD798639DC3 /* FlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlowTests.swift; sourceTree = "<group>"; };
 		AD20CB6D9ECD8580A75AC516 /* HealthBridgeApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthBridgeApp.swift; sourceTree = "<group>"; };
@@ -93,6 +105,7 @@
 			children = (
 				585D1709C31DB30E6A4A10D0 /* CheckpointTests.swift */,
 				12ADDC82C73CA2F381094D92 /* ContractTests.swift */,
+				2E5E3EFEB2BBEE7E08F78EA4 /* CredentialTests.swift */,
 			);
 			path = HealthBridgeTests;
 			sourceTree = "<group>";
@@ -100,17 +113,22 @@
 		C37769715314274CEBE70E11 /* HealthBridge */ = {
 			isa = PBXGroup;
 			children = (
+				5A3ECEB18F5644AA05D1EEC4 /* AgentHelpView.swift */,
 				8AEC3EBA6B25D4AA14FA24D4 /* AppModel.swift */,
 				0DFBD63A484DA3F649D6B0E6 /* Assets.xcassets */,
+				7192E7F9B3523FE022BC86DD /* Credentials.swift */,
 				02AC71CF4B748F47B17F6C14 /* HealthBridge.entitlements */,
 				AD20CB6D9ECD8580A75AC516 /* HealthBridgeApp.swift */,
 				54FD19CB35CAFFC8D0E5DAE0 /* HealthStore.swift */,
 				F808E2F673832911E8358643 /* Keychain.swift */,
 				D790C92C669D539B51B9C23C /* MainView.swift */,
+				533F45008B76697A7CDC9DB2 /* MCPConnection.swift */,
 				BBD49A5A2BDB6A19EE2735BC /* Models.swift */,
 				2E5ECF2C2AE375EFAC2DFCA8 /* OnboardingView.swift */,
 				FA8E1272016F4F8EDE6E8E5A /* PageTransfer.swift */,
 				D37E3E35AC931FAF3222564B /* ServerAPI.swift */,
+				6CD17CD29D5516DCD112AF1B /* TokenSetupTestProtocol.swift */,
+				274924FCEFA409B3C649CA7D /* TokenSetupView.swift */,
 			);
 			path = HealthBridge;
 			sourceTree = "<group>";
@@ -233,15 +251,20 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				984AF0AB042A6CE9C71550F3 /* AgentHelpView.swift in Sources */,
 				7D0C0D164AA4702AA60F63E7 /* AppModel.swift in Sources */,
+				C93BB32CD1DFC573DCAE861C /* Credentials.swift in Sources */,
 				9BDF446C96281FFC0DF8A950 /* HealthBridgeApp.swift in Sources */,
 				BD9F58065359EB1A3D986B42 /* HealthStore.swift in Sources */,
 				B6BF3EDB1FE61364FF742F40 /* Keychain.swift in Sources */,
+				474AFB9564DF6F8AAA5661A0 /* MCPConnection.swift in Sources */,
 				5F47B19481BF70B1BA134E85 /* MainView.swift in Sources */,
 				98517E12DC52DA5D58D16813 /* Models.swift in Sources */,
 				9D2ED4B488A40DB6B4E65807 /* OnboardingView.swift in Sources */,
 				762A1BC5B0DEA9DA09859715 /* PageTransfer.swift in Sources */,
 				7510ED65F56C78A562B7A7D6 /* ServerAPI.swift in Sources */,
+				4F40CB5E00E4EE863B08F9A4 /* TokenSetupTestProtocol.swift in Sources */,
+				F8652BA7BCBE0C33FF1F1A72 /* TokenSetupView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -251,6 +274,7 @@
 			files = (
 				8D84A0E8A3FF355C1ACE12F9 /* CheckpointTests.swift in Sources */,
 				226298BED5AA92F9A1A74CA2 /* ContractTests.swift in Sources */,
+				3048D9B2BF96148B46F343A8 /* CredentialTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

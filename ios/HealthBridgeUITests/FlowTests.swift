@@ -24,9 +24,12 @@ final class FlowTests: XCTestCase {
     app.textFields["serverURL"].typeText("http://invalid.test")
     app.secureTextFields["ingestToken"].tap()
     app.secureTextFields["ingestToken"].typeText("synthetic-test-only")
+    app.buttons["完成"].tap()
+    if !app.buttons["测试连接"].isHittable { app.swipeUp() }
     app.buttons["测试连接"].tap()
     XCTAssertTrue(app.staticTexts["请填写不含路径、账号或查询参数的 HTTPS 服务器地址。"].waitForExistence(timeout: 3))
     capture("02-invalid-connection")
+    app.swipeUp()
     XCTAssertFalse(app.buttons["继续"].isEnabled)
   }
   func testLocalOverviewDetailAndSettings() {
@@ -76,5 +79,49 @@ final class FlowTests: XCTestCase {
       app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "服务器")).firstMatch
         .waitForExistence(timeout: 3))
     capture("14-dark-settings")
+  }
+}
+
+extension FlowTests {
+  func testGenerateAndResumeTokenDraft() {
+    let app = launch(["--ui-intro"])
+    app.buttons["连接我的服务器"].tap()
+    app.buttons["生成新 Token"].tap()
+    XCTAssertTrue(app.buttons["generateTokens"].waitForExistence(timeout: 3))
+    if app.buttons["generateTokens"].label == "重新生成" {
+      app.buttons["generateTokens"].tap()
+      app.buttons["替换草稿"].tap()
+    } else {
+      app.buttons["generateTokens"].tap()
+    }
+    XCTAssertTrue(app.buttons["复制 MCP_TOKEN"].waitForExistence(timeout: 3))
+    capture("15-token-generation")
+    app.buttons["复制 MCP_TOKEN"].tap()
+    app.buttons["关闭"].tap()
+    XCTAssertFalse(app.buttons["继续"].isEnabled)
+    app.buttons["生成新 Token"].tap()
+    XCTAssertTrue(app.buttons["复制 INGEST_TOKEN"].waitForExistence(timeout: 3))
+    if !app.buttons["useGeneratedTokens"].isHittable { app.swipeUp() }
+    app.buttons["useGeneratedTokens"].tap()
+    XCTAssertTrue(app.secureTextFields["ingestToken"].exists)
+    app.swipeUp()
+    XCTAssertFalse(app.buttons["继续"].isEnabled)
+    capture("16-generated-connection")
+  }
+  func testImportReadOnlyTokenAndCopyConfiguration() {
+    let app = launch(["--ui-agent", "--ui-token-network"])
+    app.buttons["连接 AI Agent"].tap()
+    XCTAssertTrue(app.secureTextFields["mcpToken"].waitForExistence(timeout: 3))
+    XCTAssertFalse(app.buttons["复制只读 Token"].isEnabled)
+    app.secureTextFields["mcpToken"].tap()
+    app.secureTextFields["mcpToken"].typeText("synthetic-reader-test")
+    app.buttons["saveMCPToken"].tap()
+    XCTAssertTrue(app.staticTexts["只读连接已验证"].waitForExistence(timeout: 5))
+    app.buttons["复制只读 Token"].tap()
+    capture("17-agent-token")
+    app.swipeUp()
+    XCTAssertTrue(app.buttons["copyAgentConfig"].waitForExistence(timeout: 3))
+    app.buttons["copyAgentConfig"].tap()
+    capture("18-agent-copy")
   }
 }

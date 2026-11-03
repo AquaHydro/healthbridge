@@ -332,32 +332,3 @@ struct SettingsTypesView: View {
     }.navigationTitle("数据类型")
   }
 }
-struct AgentHelpView: View {
-  @Environment(AppModel.self) private var model
-  var body: some View {
-    let endpoint =
-      model.preferences.server.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + "/mcp"
-    List {
-      Section("MCP 地址") {
-        Text(model.preferences.server.isEmpty ? "请先连接服务器" : endpoint).font(.footnote.monospaced())
-          .textSelection(.enabled)
-        if !model.preferences.server.isEmpty {
-          ShareLink(item: endpoint) { Label("分享地址", systemImage: "square.and.arrow.up") }
-        }
-      }
-      Section("连接方式") {
-        Text("使用支持 Streamable HTTP 与 Bearer Token 的 MCP 客户端。请求头：")
-        Text("Authorization: Bearer <你的 MCP_TOKEN>").font(.footnote.monospaced()).textSelection(
-          .enabled)
-      }
-      Section("只读查询") {
-        Text(
-          "先调用 get_sync_status 检查数据新鲜度，再调用 query_samples、aggregate 或 sleep_summary。服务器不提供任何 MCP 写入工具。"
-        )
-      }
-      Section {
-        Text("MCP Token 不在此 App 保存。请在 Cloudflare 部署时安全保管，不能使用写入 Token 替代。完整客户端配置示例见项目 README。")
-      }.foregroundStyle(.secondary)
-    }.navigationTitle("连接 AI Agent")
-  }
-}

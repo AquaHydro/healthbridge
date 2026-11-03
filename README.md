@@ -40,7 +40,9 @@ npx wrangler d1 create healthbridge
 
 当前配置的数据库 ID 属于本项目现有部署。新用户必须将它替换为自己刚创建的数据库 ID，不能沿用。将输出的 `database_id` 写入 `server/wrangler.jsonc` 对应的 `d1_databases[0]`。如账号已有同名数据库或 Worker，先核对归属；不要覆盖其他项目。多人共享 Cloudflare 账号时也需要使用你自己的专属 Worker 和数据库。
 
-在密码管理器中分别生成并保管两个独立的 32 字节以上随机 Token。可用 `openssl rand -hex 32 | pbcopy` 将随机 Token 直接复制到 macOS 剪贴板，保存到密码管理器后再生成另一个；不要粘贴到聊天、Git、URL 或日志。
+推荐在 App 的“连接服务器 → 生成新 Token”中生成两枚独立的 256 位 Token。草稿保存在本机 Keychain，关闭页面后可以继续；分别复制到 Worker 的 `INGEST_TOKEN` 和 `MCP_TOKEN` Secrets，保存部署后回 App 使用这组 Token 测试连接。生成草稿不会修改当前连接，也不会自动设置远程 Secrets。
+
+也可以在密码管理器中分别生成并保管两个独立的 32 字节以上随机 Token。可用 `openssl rand -hex 32 | pbcopy` 将随机 Token 直接复制到 macOS 剪贴板，保存到密码管理器后再生成另一个；不要粘贴到聊天、Git、URL 或日志。
 
 ```sh
 npx wrangler secret put INGEST_TOKEN
@@ -51,7 +53,7 @@ npm run deploy
 `deploy` 先运行远程 D1 迁移，再发布 Worker。首次执行 `secret put` 时，如 Wrangler 提示创建尚不存在的同名 Worker，确认它是你的专属名称后继续。两个 Token 缺失或相同会返回 503 并拒绝处理数据。
 
 - `INGEST_TOKEN`：只交给 iPhone，用于连接检测、上传、删除和状态查询。
-- `MCP_TOKEN`：只交给受信任的 AI 客户端，用于 `/mcp` 只读查询。
+- `MCP_TOKEN`：用于 `/mcp` 只读查询。App 可以在独立 Keychain 条目中按服务器保存它，供你复制给可信任的 AI 客户端；不会用它上传或删除数据。
 - Worker 配置关闭持久化请求日志，不打印请求头、请求体或样本。勿开启包含健康数据的调试日志。
 - 更新 Token：再次执行对应的 `wrangler secret put`，然后更新持有该 Token 的设备或客户端。更换写入 Token 不影响原同步位置。
 - 数据库变更使用新增迁移，不能修改已应用的迁移。D1 的历史恢复/备份保留按 Cloudflare 服务政策处理。
@@ -63,7 +65,7 @@ npm run deploy
 1. 打开 `ios/HealthBridge.xcodeproj`，选择 `HealthBridge` Scheme。
 2. 在 Signing & Capabilities 选自己的 Apple 开发团队、唯一 Bundle ID，保留 HealthKit 与 Background Delivery。让 Xcode 自动签名，不导入其他项目的描述文件。
 3. 连接、信任并解锁 iPhone，开启开发者模式。Apple 如提示最新开发者协议，应由账号持有人在开发者网站处理。
-4. Run 安装；App 中填写部署得到的 HTTPS 根地址及 `INGEST_TOKEN`，测试连接。
+4. Run 安装；App 中填写部署得到的 HTTPS 根地址及 `INGEST_TOKEN`，可同时填写 `MCP_TOKEN`。也可以先生成新 Token，配置到 Cloudflare 后再测试。只有验证通过并点“继续”才启用新连接。
 5. 阅读独立的数据共享说明，自己决定是否同意；选择数据类型与首次范围，然后在系统界面完成健康读取授权。
 6. 首次上传显示在“同步”页，可在后台继续。概览直接读取本机数据，不依赖服务端。
 
@@ -107,6 +109,16 @@ xcodebuild -project ios/HealthBridge.xcodeproj -scheme HealthBridge \
 | `sleep_summary`   | 18:00 分夜，单来源/设备优先阶段记录，区间合并后统计睡眠分钟              |
 
 ISO 时间必须带时区；`YYYY-MM-DD` 按 `tz` 分钟偏移解释，省略时使用最近样本偏移。睡眠工具以本地醒来日期标记一晚，结束日期不包含。时间范围过大时返回明确错误，请缩小范围，不静默截断统计。
+
+### 在 App 中快捷复制
+
+“设置 → 连接 AI Agent”可复制 MCP 地址、只读 Token、Codex / Claude Code / 通用 JSON 配置。已有部署的用户只需导入原 MCP Token 并点击“验证并保存”，无需重新生成。
+
+- MCP 导入通过协议初始化验证，不读取健康样本；写入 Token 和只读 Token 相同会被拒绝。
+- 配置预览始终显示占位符。打开“复制时包含只读 Token”后，完整配置含真实只读凭据，仅粘贴到个人私有配置中，不提交 Git。关闭该选项则复制无凭据模板。
+- 复制内容支持通用剪贴板，并设置 2 分钟有效期；粘贴到目标应用后的副本由目标应用管理。
+- 服务器地址隔离保存 MCP Token；断开连接会清除当前服务器在 App 中保存的两种 Token。独立的未使用生成草稿仍保留，便于继续部署。
+- App 不存储 Cloudflare 管理凭据，不开放未认证的远程 Token 初始化接口，也不会自动轮换现有 Secrets。
 
 ### Codex
 
