@@ -1,6 +1,5 @@
 import AVFoundation
 import SwiftUI
-import VisionKit
 
 struct QuickConnectView: View {
   @Environment(AppModel.self) private var model
@@ -57,6 +56,7 @@ struct QuickConnectView: View {
         Text("已有服务器可直接连接。")
       }
     }.navigationTitle("连接服务器").navigationBarTitleDisplayMode(.inline)
+      .task { if CameraDiagnostics.enabled { await scan() } }
       .sheet(isPresented: $scanning) {
         NavigationStack {
           ConnectionScanner(
@@ -85,11 +85,12 @@ struct QuickConnectView: View {
     } catch { message = "这不是有效的连接链接。" }
   }
   private func scan() async {
-    guard DataScannerViewController.isSupported else {
+    CameraDiagnostics.record("scan_requested")
+    guard AVCaptureDevice.default(for: .video) != nil else {
       message = "此设备暂不支持扫码，请粘贴连接链接。"
       return
     }
-    guard await AVCaptureDevice.requestAccess(for: .video), DataScannerViewController.isAvailable
+    guard await AVCaptureDevice.requestAccess(for: .video)
     else {
       message = "请允许相机访问，或粘贴连接链接。"
       return
@@ -110,44 +111,5 @@ struct QuickConnectView: View {
       try? Keychain.clearPairingAttempt()
       advance = true
     } catch { message = (error as? LocalizedError)?.errorDescription ?? "暂时无法连接，请重试。" }
-  }
-}
-struct ConnectionScanner: UIViewControllerRepresentable {
-  let receive: (String) -> Void
-  let failed: () -> Void
-  func makeCoordinator() -> Coordinator { Coordinator(receive: receive) }
-  func makeUIViewController(context: Context) -> DataScannerViewController {
-    let scanner = DataScannerViewController(
-      recognizedDataTypes: [.barcode(symbologies: [.qr])], qualityLevel: .balanced,
-      recognizesMultipleItems: false, isHighFrameRateTrackingEnabled: false,
-      isGuidanceEnabled: true, isHighlightingEnabled: true)
-    scanner.delegate = context.coordinator
-    do { try scanner.startScanning() } catch { DispatchQueue.main.async { failed() } }
-    return scanner
-  }
-  func updateUIViewController(_ controller: DataScannerViewController, context: Context) {}
-  static func dismantleUIViewController(
-    _ controller: DataScannerViewController, coordinator: Coordinator
-  ) { controller.stopScanning() }
-  final class Coordinator: NSObject, DataScannerViewControllerDelegate {
-    let receive: (String) -> Void
-    var received = false
-    init(receive: @escaping (String) -> Void) { self.receive = receive }
-    func dataScanner(
-      _ dataScanner: DataScannerViewController, didAdd addedItems: [RecognizedItem],
-      allItems: [RecognizedItem]
-    ) {
-      guard !received else { return }
-      for item in addedItems {
-        if case .barcode(let barcode) = item, let value = barcode.payloadStringValue,
-          value.hasPrefix("healthbridge://connect")
-        {
-          received = true
-          dataScanner.stopScanning()
-          receive(value)
-          break
-        }
-      }
-    }
   }
 }

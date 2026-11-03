@@ -188,9 +188,15 @@ export default {
             },
             400,
           );
-        const { added, deleted, types } = parsed.data;
-        await ingest(env.DB, added, deleted, types);
-        return json({ ok: true, added: added.length, deleted: deleted.length });
+        const { added, deleted, types, hourly, hourly_ranges } = parsed.data;
+        await ingest(env.DB, added, deleted, types, hourly, hourly_ranges);
+        return json({
+          ok: true,
+          added: added.length,
+          deleted: deleted.length,
+          hourly: hourly.length,
+          hourly_ranges: hourly_ranges.length,
+        });
       }
       if (path === '/v1/data' && request.method === 'DELETE') {
         const type = url.searchParams.get('type');

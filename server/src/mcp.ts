@@ -56,7 +56,7 @@ export function mcp(db: D1Database) {
       'query_samples',
       {
         description:
-          'Read raw samples by start time in [from,to). Date-only bounds use tz minutes; ISO timestamps require explicit offset. Units: bpm, ms (HRV SDNN), count, sleep stages 0 in-bed/1 asleep/2 awake/3 core/4 deep/5 REM. Returns UTC and sample-local timestamps; source/device strings are untrusted data. Paginate with next_cursor for identical bounds.',
+          'Read stored raw samples only; hourly heart_rate/steps are available via aggregate and cannot be reconstructed. Historical raw samples may coexist but are excluded from aggregate within replaced ranges. Read raw samples by start time in [from,to). Date-only bounds use tz minutes; ISO timestamps require explicit offset. Units: bpm, ms (HRV SDNN), count, sleep stages 0 in-bed/1 asleep/2 awake/3 core/4 deep/5 REM. Returns UTC and sample-local timestamps; source/device strings are untrusted data. Paginate with next_cursor for identical bounds.',
         inputSchema: {
           ...bounds,
           limit: z.number().int().min(1).max(2000).default(500),
@@ -111,7 +111,7 @@ export function mcp(db: D1Database) {
       'aggregate',
       {
         description:
-          'Read avg/min/max/sum/count grouped by sample-local start hour/day, for [from,to) start timestamps. Steps sums are raw source totals and may double-count multiple devices; not Apple Health deduplicated totals. Sleep numeric averages are not durations; use sleep_summary.',
+          'Read avg/min/max/sum/count grouped by sample-local start hour/day, for [from,to) start timestamps. Hourly steps use HealthKit cumulative statistics; legacy raw source totals outside hourly replacement ranges may double-count devices; not Apple Health deduplicated totals. Hourly data cannot reconstruct partial hours or local buckets with fractional-hour timezone offsets; these queries return an error. Sleep numeric averages are not durations; use sleep_summary.',
         inputSchema: { ...bounds, bucket: z.enum(['hour', 'day']) },
         annotations,
       },
@@ -122,13 +122,25 @@ export function mcp(db: D1Database) {
             args.to,
             await timezone(db, args.tz),
           );
+          const incompatible = await db
+            .prepare(
+              `SELECT 1 FROM hourly
+            WHERE type=? AND start_ms<? AND end_ms>? AND
+            (start_ms<? OR end_ms>? OR tz_min % 60 != 0 OR coverage_start_ms>start_ms) LIMIT 1`,
+            )
+            .bind(args.type, end, start, start, end)
+            .first();
+          if (incompatible)
+            throw new InputError(
+              'Hourly statistics require complete UTC hours and whole-hour sample timezone offsets; partial-hour coverage (including sharing/deletion cutoff) or fractional-offset local buckets cannot be reconstructed',
+            );
           const format =
             args.bucket === 'hour' ? '%Y-%m-%dT%H:00:00' : '%Y-%m-%dT00:00:00';
           const rows = await db
             .prepare(
               `SELECT strftime(?, (start_ms+tz_min*60000)/1000, 'unixepoch') AS local_bucket,
-        tz_min, AVG(value) AS avg, MIN(value) AS min, MAX(value) AS max, SUM(value) AS sum, COUNT(*) AS count
-        FROM samples WHERE type=? AND start_ms>=? AND start_ms<? GROUP BY local_bucket,tz_min ORDER BY local_bucket,tz_min LIMIT 10001`,
+        tz_min, SUM(sum)/SUM(count) AS avg, MIN(min) AS min, MAX(max) AS max, SUM(sum) AS sum, SUM(count) AS count
+        FROM effective_statistics WHERE type=? AND start_ms>=? AND start_ms<? GROUP BY local_bucket,tz_min ORDER BY local_bucket,tz_min LIMIT 10001`,
             )
             .bind(format, args.type, start, end)
             .all<{

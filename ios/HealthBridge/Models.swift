@@ -91,22 +91,95 @@ struct HealthSample: Codable, Sendable {
     try c.encode(device, forKey: .device)
   }
 }
+struct HourlyBucket: Codable, Sendable {
+  let type: String
+  let start_ms: Int64
+  let end_ms: Int64
+  let tz_min: Int
+  let sum: Double
+  let count: Int
+  let min: Double
+  let max: Double
+  var coverage_start_ms: Int64? = nil
+}
+struct HourlyRange: Codable, Sendable {
+  let type: String
+  let start_ms: Int64
+  let end_ms: Int64
+}
+enum SyncFrequency: String, Codable, CaseIterable, Identifiable {
+  case immediate, hourly, daily, manual
+  var id: String { rawValue }
+  var title: String {
+    switch self {
+    case .immediate: "有更新时"
+    case .hourly: "每小时"
+    case .daily: "每天"
+    case .manual: "仅手动"
+    }
+  }
+  var interval: TimeInterval {
+    switch self {
+    case .immediate: 0
+    case .hourly: 3600
+    case .daily: 86400
+    case .manual: .infinity
+    }
+  }
+  func nextAllowed(after last: Date?) -> Date {
+    if self == .manual { return .distantFuture }
+    return (last ?? .distantPast).addingTimeInterval(interval)
+  }
+  var healthKitFrequency: HKUpdateFrequency {
+    switch self {
+    case .immediate: .immediate
+    case .hourly: .hourly
+    case .daily: .daily
+    case .manual: .immediate
+    }
+  }
+}
+enum SyncTrigger: String {
+  case manual = "手动同步"
+  case healthUpdate = "健康数据更新"
+  case retry = "未完成任务重试"
+  case settings = "共享设置变更"
+  case authorization = "完成健康授权"
+  case unlocked = "解锁后继续"
+}
+struct SyncQueue {
+  private(set) var types: Set<HealthType> = []
+  mutating func enqueue(_ requested: Set<HealthType>, selected: Set<HealthType>) {
+    types.formUnion(requested.intersection(selected))
+  }
+  mutating func take() -> Set<HealthType> {
+    let result = types
+    types.removeAll()
+    return result
+  }
+  mutating func clear() { types.removeAll() }
+}
 struct IngestBatch: Encodable {
   let schema_version = 1
   let added: [HealthSample]
   let deleted: [String]
   let types: [String]
+  var hourly: [HourlyBucket]? = nil
+  var hourly_ranges: [HourlyRange]? = nil
 }
 struct ServerStatus: Decodable {
   let ok: Bool
   let version: String
   let schema_version: Int
   let counts: [String: Int]
+  var hourly_schema_version: Int? = nil
 }
 struct IngestReceipt: Decodable {
   let ok: Bool
   let added: Int
   let deleted: Int
+  let hourly: Int?
+  let hourly_ranges: Int?
 }
 struct DayValue: Identifiable {
   let date: Date
@@ -118,12 +191,22 @@ struct TypeProgress: Codable {
   var lastSuccess: Date?
   var message = "等待同步"
 }
+struct HourlyResume: Codable {
+  let fingerprint: String
+  let cursor: Date
+}
 struct Preferences: Codable {
   var onboarded = false
   var authorizationPending = false
   var server = ""
   var consentDate: Date?
   var selected = Set(HealthType.allCases)
+  var pendingAutomatic: Set<HealthType> = []
+  var lastAutomatic: Date?
+  var hourlyFormatVersion = 0
+  var hourlyResume: [String: HourlyResume] = [:]
+  var frequency: SyncFrequency = .hourly
+  var lastTrigger: String?
   var days = 30
   var since: [String: Date] = [:]
   var progress: [String: TypeProgress] = [:]
@@ -151,6 +234,12 @@ extension Preferences {
     consentDate = try c.decodeIfPresent(Date.self, forKey: .consentDate)
     selected =
       try c.decodeIfPresent(Set<HealthType>.self, forKey: .selected) ?? Set(HealthType.allCases)
+    pendingAutomatic = try c.decodeIfPresent(Set<HealthType>.self, forKey: .pendingAutomatic) ?? []
+    lastAutomatic = try c.decodeIfPresent(Date.self, forKey: .lastAutomatic)
+    hourlyFormatVersion = try c.decodeIfPresent(Int.self, forKey: .hourlyFormatVersion) ?? 0
+    hourlyResume = try c.decodeIfPresent([String: HourlyResume].self, forKey: .hourlyResume) ?? [:]
+    frequency = try c.decodeIfPresent(SyncFrequency.self, forKey: .frequency) ?? .hourly
+    lastTrigger = try c.decodeIfPresent(String.self, forKey: .lastTrigger)
     days = try c.decodeIfPresent(Int.self, forKey: .days) ?? 30
     since = try c.decodeIfPresent([String: Date].self, forKey: .since) ?? [:]
     progress = try c.decodeIfPresent([String: TypeProgress].self, forKey: .progress) ?? [:]
@@ -168,5 +257,31 @@ enum BridgeError: LocalizedError {
     case .keychain: "无法安全保存 Token，请解锁设备后重试。"
     case .invalidReceipt: "服务器未确认完整批次，稍后会安全重试。"
     }
+  }
+}
+
+struct HourlyWindow: Equatable {
+  let start: Date
+  let end: Date
+  static func affected(added: [HealthSample], deleted: [String], since: Date, now: Date) -> [Self] {
+    func floorHour(_ date: Date) -> Date {
+      Date(timeIntervalSince1970: floor(date.timeIntervalSince1970 / 3600) * 3600)
+    }
+    let ranges: [Self]
+    if !deleted.isEmpty {
+      ranges = [Self(start: floorHour(since), end: floorHour(now).addingTimeInterval(3600))]
+    } else {
+      ranges = added.map { sample in
+        Self(start: Swift.max(floorHour(since), floorHour(Date(timeIntervalSince1970: Double(sample.start_ms) / 1000))),
+          end: floorHour(Date(timeIntervalSince1970: Double(Swift.max(sample.start_ms, sample.end_ms - 1)) / 1000)).addingTimeInterval(3600))
+      }.sorted { $0.start < $1.start }
+    }
+    var merged: [Self] = []
+    for range in ranges {
+      if let last = merged.last, range.start <= last.end {
+        merged[merged.count - 1] = Self(start: last.start, end: Swift.max(last.end, range.end))
+      } else { merged.append(range) }
+    }
+    return merged
   }
 }

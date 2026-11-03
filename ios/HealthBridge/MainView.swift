@@ -172,7 +172,7 @@ struct HealthDetailView: View {
           type == .sleep
             ? "本机 Apple 健康；每晚优先采用有睡眠阶段的单一来源，重叠区间合并。"
             : type == .steps
-              ? "本机 HealthKit 统计。服务器保留原始来源，跨设备步数求和可能与本机统计不同。" : "本机 HealthKit 每日平均值。心率变异性为 SDNN。"
+              ? "本机 HealthKit 统计。服务器保存步数的小时汇总。" : "本机 HealthKit 每日平均值。心率变异性为 SDNN。"
         ).foregroundStyle(.secondary)
       }
     }.navigationTitle(type.title)
@@ -187,7 +187,12 @@ struct SyncView: View {
           model.statusText,
           systemImage: model.syncing
             ? "arrow.triangle.2.circlepath"
-            : model.preferences.canSync ? "checkmark.circle" : "pause.circle")
+            : model.preferences.canSync
+              ? (model.notice == nil ? "checkmark.circle" : "exclamationmark.triangle")
+              : "pause.circle")
+        if let trigger = model.preferences.lastTrigger {
+          LabeledContent("最近触发原因", value: trigger).font(.subheadline)
+        }
         if model.syncing { ProgressView().frame(maxWidth: .infinity) }
         if model.preferences.canSync {
           Button(
@@ -216,7 +221,7 @@ struct SyncView: View {
             Label(type.title, systemImage: type.icon).font(.headline).foregroundStyle(type.color)
             Text(model.preferences.canSync ? progress.message : "仅在本机查看，不上传").font(.subheadline)
             if model.preferences.canSync {
-              Text("已确认上传 \(progress.uploaded) 条 · 重试可能重复计入进度，服务器按 UUID 去重").font(.caption)
+              Text("累计处理 \(progress.uploaded) 条").font(.caption)
                 .foregroundStyle(.secondary)
               if let date = progress.lastSuccess {
                 Text("最后完成 \(date.formatted(date: .abbreviated, time: .shortened))").font(.caption)
@@ -226,10 +231,11 @@ struct SyncView: View {
           }.padding(.vertical, 5)
         }
       }
-      Section("同步说明") {
-        Text("首次同步分批进行，可以离开此页面。网络恢复或再次打开 App 时，会从最后确认的批次继续。")
-        Text("iPhone 锁定时健康数据可能不可读，解锁后再补齐。后台频率由 iOS 决定；上划关闭 App 后，需要重新打开。")
-        Text("空数据不代表拒绝授权。待上传总数只有读取后才能确定，这里不估算未读取的记录。")
+      Section {
+        DisclosureGroup("同步说明") {
+          Text("可以离开此页面。未完成的同步会在系统允许时重试，也可手动同步。")
+          Text("后台更新由 iOS 调度。锁屏期间可能需要等待解锁；上划关闭 App 后，请重新打开。")
+        }
       }.font(.footnote).foregroundStyle(.secondary)
     }.navigationTitle("同步")
   }
@@ -253,6 +259,14 @@ struct SettingsView: View {
       }
       Section("健康数据") {
         NavigationLink("数据类型") { SettingsTypesView() }
+        Picker("期望同步频率", selection: Binding(
+          get: { model.preferences.frequency },
+          set: { frequency in Task { await model.setFrequency(frequency) } }
+        )) {
+          ForEach(SyncFrequency.allCases) { Text($0.title).tag($0) }
+        }.accessibilityIdentifier("sync-frequency")
+        Text("更新会按所选间隔合并。后台等待下次系统唤醒，可能晚于期望时间；仅手动会关闭自动同步。立即同步不受频率限制。")
+          .font(.footnote).foregroundStyle(.secondary)
         Picker(
           "首次同步范围",
           selection: Binding(

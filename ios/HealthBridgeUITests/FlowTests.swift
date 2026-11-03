@@ -57,7 +57,7 @@ final class FlowTests: XCTestCase {
     XCTAssertTrue(app.buttons["连接服务器"].waitForExistence(timeout: 3))
     capture("08-local-sync")
     for (argument, label, name) in [
-      ("--ui-failure", "本次尚未完成，将在网络恢复或下次打开时重试", "09-failure"),
+      ("--ui-failure", "本次尚未完成，请稍后重试同步", "09-failure"),
       ("--ui-lock", "iPhone 锁定时无法读取健康数据，解锁后继续", "10-lock-wait"),
       ("--ui-progress", "正在同步健康数据", "11-progress"), ("--ui-paused", "同步已暂停 · 已撤回共享", "12-paused"),
     ] {

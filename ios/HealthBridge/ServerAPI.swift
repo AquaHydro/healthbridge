@@ -36,6 +36,7 @@ struct ServerAPI {
     if http.statusCode == 410 { throw PairingError.expired }
     if http.statusCode == 429 { throw PairingError.unavailable }
     if http.statusCode == 401 { throw BridgeError.unauthorized }
+    if http.statusCode == 400 || http.statusCode == 404 { throw BridgeError.incompatible }
     guard http.statusCode == 200 else { throw BridgeError.unavailable }
     return try JSONDecoder().decode(T.self, from: data)
   }
@@ -47,8 +48,16 @@ struct ServerAPI {
   func upload(_ batch: IngestBatch) async throws {
     let receipt = try await request(
       "v1/ingest", method: "POST", body: JSONEncoder().encode(batch), type: IngestReceipt.self)
+    try Self.validate(receipt, for: batch)
+  }
+  static func validate(_ receipt: IngestReceipt, for batch: IngestBatch) throws {
     guard receipt.ok, receipt.added == batch.added.count, receipt.deleted == batch.deleted.count
     else { throw BridgeError.invalidReceipt }
+    if let hourly = batch.hourly {
+      guard receipt.hourly == hourly.count,
+        receipt.hourly_ranges == batch.hourly_ranges?.count
+      else { throw BridgeError.incompatible }
+    }
   }
   func deleteAll() async throws {
     struct Receipt: Decodable { let ok: Bool }

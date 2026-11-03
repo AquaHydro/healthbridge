@@ -5,6 +5,7 @@ import {
   StreamableHTTPClientTransport,
 } from '@modelcontextprotocol/client';
 import migration from '../migrations/0001_init.sql?raw';
+import hourlyMigration from '../migrations/0003_hourly.sql?raw';
 import pairingMigration from '../migrations/0002_pairing.sql?raw';
 import { time, range } from '../src/schema';
 import { status } from '../src/data';
@@ -57,7 +58,7 @@ function textResult(r: Awaited<ReturnType<Client['callTool']>>) {
   return JSON.parse(content[0]!.text!);
 }
 beforeAll(async () => {
-  const sql = migration + '\n' + pairingMigration;
+  const sql = migration + '\n' + pairingMigration + '\n' + hourlyMigration;
   await env.DB.batch(
     sql
       .split(';')
@@ -68,6 +69,8 @@ beforeAll(async () => {
 beforeEach(async () => {
   await env.DB.batch([
     env.DB.prepare('DELETE FROM samples'),
+    env.DB.prepare('DELETE FROM hourly'),
+    env.DB.prepare('DELETE FROM hourly_ranges'),
     env.DB.prepare('DELETE FROM meta'),
     env.DB.prepare('DELETE FROM pairing_tickets'),
     env.DB.prepare('DELETE FROM pairing_owners'),
@@ -511,5 +514,198 @@ describe('first-install pairing', () => {
       },
     );
     expect(r.status).toBe(403);
+  });
+});
+
+describe('hourly replacement contract', () => {
+  const start = Date.parse('2026-11-03T00:00:00Z');
+  const hour = (patch = {}) => ({
+    type: 'heart_rate',
+    start_ms: start,
+    end_ms: start + 3600000,
+    tz_min: 480,
+    sum: 120,
+    count: 2,
+    min: 50,
+    max: 70,
+    ...patch,
+  });
+  const replace = (
+    hourly: unknown[],
+    hourly_ranges = [
+      { type: 'heart_rate', start_ms: start, end_ms: start + 7200000 },
+    ],
+  ) =>
+    fetcher('/v1/ingest', 'POST', writer, {
+      schema_version: 1,
+      added: [],
+      deleted: [],
+      hourly,
+      hourly_ranges,
+    });
+  it('retries atomically, excludes preserved raw, weights daily averages and removes empty hours', async () => {
+    await upload([sample({ start_ms: start, end_ms: start, value: 999 })]);
+    const hours = [
+      hour(),
+      hour({
+        start_ms: start + 3600000,
+        end_ms: start + 7200000,
+        sum: 90,
+        count: 1,
+        min: 90,
+        max: 90,
+      }),
+    ];
+    expect((await replace(hours)).status).toBe(200);
+    expect(await (await replace(hours)).json()).toMatchObject({
+      hourly: 2,
+      hourly_ranges: 1,
+    });
+    expect(
+      await env.DB.prepare('SELECT COUNT(*) n FROM samples').first('n'),
+    ).toBe(1);
+    const c = await client();
+    try {
+      const args = {
+        type: 'heart_rate',
+        from: '2026-11-03T00:00:00Z',
+        to: '2026-11-04T00:00:00Z',
+        bucket: 'day',
+      };
+      const r = textResult(
+        await c.callTool({ name: 'aggregate', arguments: args }),
+      );
+      expect(r.buckets[0]).toMatchObject({
+        avg: 70,
+        sum: 210,
+        count: 3,
+        min: 50,
+        max: 90,
+      });
+      await replace([]);
+      expect(
+        textResult(await c.callTool({ name: 'aggregate', arguments: args }))
+          .buckets,
+      ).toEqual([]);
+      expect((await status(env.DB)).counts.heart_rate).toBe(0);
+      await fetcher('/v1/data?type=heart_rate', 'DELETE');
+      expect(
+        await env.DB.prepare('SELECT COUNT(*) n FROM hourly_ranges').first('n'),
+      ).toBe(0);
+    } finally {
+      await c.close();
+    }
+  });
+  it('rejects duplicate, uncovered, nonhourly and inconsistent statistics without replacing', async () => {
+    await replace([hour()]);
+    for (const rows of [
+      [hour(), hour()],
+      [hour({ start_ms: start + 1 })],
+      [hour({ count: 0 })],
+      [hour({ min: 100 })],
+      [hour({ start_ms: start - 3600000, end_ms: start })],
+    ]) {
+      expect((await replace(rows)).status).toBe(400);
+      expect(
+        await env.DB.prepare('SELECT COUNT(*) n FROM hourly').first('n'),
+      ).toBe(1);
+    }
+  });
+  it('rejects partial-hour bounds and fractional-offset local buckets; keeps DST offsets separate', async () => {
+    await replace([hour({ tz_min: 330 })]);
+    const c = await client();
+    const args = {
+      type: 'heart_rate',
+      from: '2026-11-03T00:00:00Z',
+      to: '2026-11-03T02:00:00Z',
+      bucket: 'day',
+    };
+    try {
+      expect(
+        (await c.callTool({ name: 'aggregate', arguments: args })).isError,
+      ).toBe(true);
+      await replace([hour()]);
+      expect(
+        (
+          await c.callTool({
+            name: 'aggregate',
+            arguments: { ...args, from: '2026-11-03T00:30:00Z' },
+          })
+        ).isError,
+      ).toBe(true);
+      await replace([
+        hour({ tz_min: -240 }),
+        hour({
+          start_ms: start + 3600000,
+          end_ms: start + 7200000,
+          tz_min: -300,
+        }),
+      ]);
+      const r = textResult(
+        await c.callTool({
+          name: 'aggregate',
+          arguments: { ...args, bucket: 'hour' },
+        }),
+      );
+      expect(r.buckets.map((b: { tz_min: number }) => b.tz_min)).toEqual([
+        -300, -240,
+      ]);
+      expect(r.buckets).toHaveLength(2);
+    } finally {
+      await c.close();
+    }
+  });
+  it('stores a sharing cutoff, advertises support and refuses to invent a full hour', async () => {
+    const cutoff = start + 123456;
+    expect(
+      (
+        await (
+          await fetcher('/v1/ping')
+        ).json<{ hourly_schema_version: number }>()
+      ).hourly_schema_version,
+    ).toBe(1);
+    expect((await replace([hour({ coverage_start_ms: cutoff })])).status).toBe(
+      200,
+    );
+    expect(
+      await env.DB.prepare('SELECT coverage_start_ms FROM hourly').first(
+        'coverage_start_ms',
+      ),
+    ).toBe(cutoff);
+    const c = await client();
+    try {
+      const r = await c.callTool({
+        name: 'aggregate',
+        arguments: {
+          type: 'heart_rate',
+          from: '2026-11-03T00:00:00Z',
+          to: '2026-11-03T01:00:00Z',
+          bucket: 'hour',
+        },
+      });
+      expect(r.isError).toBe(true);
+      expect(textResult(r).error).toContain('sharing/deletion cutoff');
+    } finally {
+      await c.close();
+    }
+    for (const coverage_start_ms of [start - 1, start + 3600000])
+      expect((await replace([hour({ coverage_start_ms })])).status).toBe(400);
+  });
+  it('rolls back deletion and coverage when hourly insertion fails', async () => {
+    await replace([hour()]);
+    await env.DB.exec(
+      "CREATE TRIGGER fail_hour BEFORE INSERT ON hourly WHEN NEW.sum=999 BEGIN SELECT RAISE(ABORT, 'synthetic failure'); END;",
+    );
+    try {
+      expect(
+        (await replace([hour({ sum: 999, count: 1, min: 999, max: 999 })]))
+          .status,
+      ).toBe(503);
+      expect(await env.DB.prepare('SELECT sum FROM hourly').first('sum')).toBe(
+        120,
+      );
+    } finally {
+      await env.DB.exec('DROP TRIGGER fail_hour');
+    }
   });
 });

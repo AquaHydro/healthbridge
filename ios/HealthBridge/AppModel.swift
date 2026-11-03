@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 import HealthKit
 import Observation
 import UIKit
@@ -23,6 +24,8 @@ import UIKit
   private var retryTask: Task<Void, Never>?
   private var retryAttempt = 0
   private var nextTypeIndex = 0
+  private var syncQueue = SyncQueue()
+  private var automaticTask: Task<Void, Never>?
   private var overviewTask: Task<Void, Never>?
 
   var isUITesting: Bool {
@@ -33,6 +36,21 @@ import UIKit
     #endif
   }
   init() {
+    // Raw anchors from v1 cannot prove the new hourly representation was uploaded.
+    if preferences.hourlyFormatVersion < 1 {
+      for type in [HealthType.heartRate, .steps] {
+        UserDefaults.standard.removeObject(forKey: "anchor.\(type.rawValue)")
+        preferences.progress.removeValue(forKey: type.rawValue)
+      }
+      preferences.hourlyResume = [:]
+      preferences.hourlyFormatVersion = 1
+      if !isUITesting { preferences.save() }
+    }
+    if CameraDiagnostics.enabled {
+      selectedTab = 2
+      connectionSheet = true
+      CameraDiagnostics.record("diagnostic_launch")
+    }
     #if DEBUG && targetEnvironment(simulator)
       let args = ProcessInfo.processInfo.arguments
       if args.contains("--ui-test") {
@@ -71,9 +89,12 @@ import UIKit
           preferences.server = "https://example.invalid"
           preferences.consentDate = args.contains("--ui-paused") ? nil : Date()
           selectedTab = 1
-          if args.contains("--ui-failure") { notice = "本次尚未完成，将在网络恢复或下次打开时重试" }
+          if args.contains("--ui-failure") { notice = "本次尚未完成，请稍后重试同步" }
           if args.contains("--ui-lock") { notice = "iPhone 锁定时无法读取健康数据，解锁后继续" }
-          if args.contains("--ui-progress") { syncing = true }
+          if args.contains("--ui-progress") {
+            syncing = true
+            preferences.lastTrigger = SyncTrigger.healthUpdate.rawValue
+          }
         }
       }
     #endif
@@ -100,6 +121,7 @@ import UIKit
   {
     await stopSync()
     if let mcpToken { try Keychain.saveMCP(mcpToken, for: url) }
+    let tokenChanged = (try? Keychain.read()) != token
     try Keychain.save(token)
     let changed =
       preferences.server.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
@@ -107,6 +129,8 @@ import UIKit
     preferences.server = url.absoluteString
     if changed {
       preferences.consentDate = nil
+    }
+    if changed || tokenChanged {
       resetAnchors()
       preferences.progress = [:]
     }
@@ -153,7 +177,7 @@ import UIKit
       save()
       await configureObservers()
       refreshOverview()
-      startSync()
+      startSync(trigger: .authorization)
     } catch { notice = "无法打开健康授权，请稍后重试。" }
   }
   func setType(_ type: HealthType, enabled: Bool) async {
@@ -172,7 +196,7 @@ import UIKit
     }
     await configureObservers()
     refreshOverview()
-    startSync()
+    startSync(types: [type], trigger: .settings)
   }
   func setRange(_ days: Int) async {
     guard days != preferences.days else { return }
@@ -181,13 +205,23 @@ import UIKit
     preferences.days = days
     if expands { resetAnchors() }
     save()
-    startSync()
+    startSync(trigger: .settings)
+  }
+  func setFrequency(_ frequency: SyncFrequency) async {
+    preferences.frequency = frequency
+    save()
+    automaticTask?.cancel()
+    if frequency == .manual { preferences.pendingAutomatic = []; await stopSync() }
+    else { scheduleAutomatic() }
+    save()
+    await configureObservers()
   }
   func resetAnchors() {
     for type in HealthType.allCases {
       UserDefaults.standard.removeObject(forKey: "anchor.\(type.rawValue)")
     }
     preferences.since = [:]
+    preferences.hourlyResume = [:]
   }
   func deleteServerData() async throws {
     guard !maintenance else { return }
@@ -208,9 +242,34 @@ import UIKit
     serverStatus = try await api().ping()
     startSync()
   }
+  func resumeAfterUnlock() {
+    guard preferences.frequency != .manual,
+      retryAttempt > 0 || notice != nil || !preferences.hourlyResume.isEmpty else { return }
+    startSync(trigger: .unlocked)
+  }
+  private func scheduleAutomatic() {
+    automaticTask?.cancel()
+    guard preferences.frequency != .manual, !preferences.pendingAutomatic.isEmpty,
+      preferences.canUpload else { return }
+    let due = preferences.frequency.nextAllowed(after: preferences.lastAutomatic)
+    if due <= Date() {
+      let types = preferences.pendingAutomatic
+      preferences.pendingAutomatic = []
+      preferences.lastAutomatic = Date()
+      save()
+      startSync(types: types, trigger: .healthUpdate, automaticReady: true)
+    } else if UIApplication.shared.applicationState == .active {
+      automaticTask = Task {
+        try? await Task.sleep(nanoseconds: UInt64(max(0, due.timeIntervalSinceNow) * 1_000_000_000))
+        guard !Task.isCancelled, UIApplication.shared.applicationState == .active else { return }
+        scheduleAutomatic()
+      }
+    }
+    // In background, pending types persist until the next system wake. No timer is promised.
+  }
   func foreground() {
+    scheduleAutomatic()
     refreshOverview()
-    startSync()
   }
   func refreshOverview() {
     guard !isUITesting else { return }
@@ -233,7 +292,7 @@ import UIKit
   // Called synchronously from didFinishLaunching, before HealthKit delivers background events.
   func registerLaunchObservers() {
     guard !isUITesting else { return }
-    guard preferences.canUpload, HKHealthStore.isHealthDataAvailable() else { return }
+    guard preferences.canUpload, preferences.frequency != .manual, HKHealthStore.isHealthDataAvailable() else { return }
     for type in preferences.selected { register(type) }
   }
   private func register(_ type: HealthType) {
@@ -242,11 +301,12 @@ import UIKit
       Task { @MainActor in
         defer { completion() }
         if error != nil {
-          self.notice = "等待解锁或下次打开后继续同步"
+          self.notice = "等待解锁后继续，或手动重试同步"
           return
         }
-        self.startSync()
-        await self.syncTask?.value
+        self.startSync(types: [type], trigger: .healthUpdate)
+        // Notifications received during an upload stay queued and drain before completion.
+        while let task = self.syncTask { await task.value }
       }
     }
     observers[type] = query
@@ -254,25 +314,27 @@ import UIKit
   }
   func configureObservers() async {
     for (type, query) in observers
-    where !preferences.canSync || !preferences.selected.contains(type) {
+    where !preferences.canSync || preferences.frequency == .manual || !preferences.selected.contains(type) {
       health.store.stop(query)
       observers.removeValue(forKey: type)
       try? await health.store.disableBackgroundDelivery(for: type.hkType)
     }
-    guard preferences.canSync else {
+    guard preferences.canSync, preferences.frequency != .manual else {
       try? await health.store.disableAllBackgroundDelivery()
       return
     }
     for type in preferences.selected {
       register(type)
       do {
-        try await health.store.enableBackgroundDelivery(for: type.hkType, frequency: .immediate)
-      } catch { notice = "后台交付暂不可用，打开 App 仍可同步。" }
+        try await health.store.enableBackgroundDelivery(for: type.hkType, frequency: preferences.frequency.healthKitFrequency)
+      } catch { notice = "后台交付暂不可用，请手动同步。" }
     }
   }
   func stopSync() async {
     generation += 1
+    syncQueue.clear()
     retryTask?.cancel()
+    automaticTask?.cancel()
     retryTask = nil
     let task = syncTask
     syncTask?.cancel()
@@ -280,9 +342,22 @@ import UIKit
     syncTask = nil
     syncing = false
   }
-  func startSync() {
-    guard !isUITesting else { return }
-    guard syncTask == nil, !maintenance, preferences.canUpload else { return }
+  func startSync(types: Set<HealthType>? = nil, trigger: SyncTrigger = .manual, automaticReady: Bool = false) {
+    guard !isUITesting, !maintenance, preferences.canUpload else { return }
+    if trigger == .healthUpdate && !automaticReady {
+      preferences.pendingAutomatic.formUnion((types ?? preferences.selected).intersection(preferences.selected))
+      save()
+      scheduleAutomatic()
+      return
+    }
+    if trigger == .manual {
+      preferences.pendingAutomatic.subtract(types ?? preferences.selected)
+      automaticTask?.cancel()
+    }
+    syncQueue.enqueue(types ?? preferences.selected, selected: preferences.selected)
+    preferences.lastTrigger = trigger.rawValue
+    save()
+    guard syncTask == nil, !syncQueue.types.isEmpty else { return }
     let epoch = generation
     syncTask = Task {
       syncing = true
@@ -294,16 +369,25 @@ import UIKit
         if backgroundID != .invalid { UIApplication.shared.endBackgroundTask(backgroundID) }
         syncing = false
         syncTask = nil
+        if !syncQueue.types.isEmpty && !Task.isCancelled && generation == epoch {
+          startSync(types: [], trigger: .healthUpdate, automaticReady: true)
+        }
       }
+      // A single executor turn merges simultaneous HealthKit notifications without a timer.
+      await Task.yield()
+      let requested = syncQueue.take()
+      var unfinished = requested
       let deadline = Date().addingTimeInterval(25)
       var shouldRetry = false
       var hadFailure = false
       let all = HealthType.allCases
       let ordered = Array(all[nextTypeIndex...]) + Array(all[..<nextTypeIndex])
-      for type in ordered where preferences.selected.contains(type) {
+      for type in ordered where requested.contains(type) && preferences.selected.contains(type) {
         guard valid(epoch, type), Date() < deadline else { break }
         do {
           let api = try api()
+          let status = try await api.ping()
+          guard status.hourly_schema_version == 1 else { throw BridgeError.incompatible }
           let since =
             preferences.since[type.rawValue]
             ?? (preferences.days == 0
@@ -319,8 +403,31 @@ import UIKit
             try Task.checkCancellation()
             guard valid(epoch, type) else { break }
             // One HealthKit page is one server transaction; persist only its acknowledged anchor.
-            let data = try await PageTransfer.acknowledgedAnchor(
-              page: page, type: type, allowed: { self.valid(epoch, type) }, upload: api.upload)
+            let data: Data
+            if type == .heartRate || type == .steps {
+              // Raw measurements remain local. Recompute only hours touched by this delta.
+              // A deletion has no timestamp, so conservatively replace the selected history.
+              let windows = HourlyWindow.affected(added: page.added, deleted: page.deleted,
+                since: since, now: Date())
+              let ids = (page.added.map(\.uuid) + page.deleted.map { "deleted:" + $0 }).sorted().joined(separator: ",")
+              let fingerprint = SHA256.hash(data: Data(ids.utf8)).map { String(format: "%02x", $0) }.joined()
+              data = try await HourlyTransfer.acknowledgedAnchor(
+                page: page, type: type, windows: windows, fingerprint: fingerprint,
+                resume: preferences.hourlyResume[type.rawValue],
+                allowed: { self.valid(epoch, type) },
+                read: { window in
+                  try await self.health.hourly(type, since: window.start, until: window.end, notBefore: since)
+                }, upload: api.upload,
+                checkpoint: { resume in
+                  self.preferences.hourlyResume[type.rawValue] = resume
+                  self.save()
+                }, didCommitWindow: {
+                  if Date() >= deadline { throw SyncBudgetExpired() }
+                })
+            } else {
+              data = try await PageTransfer.acknowledgedAnchor(
+                page: page, type: type, allowed: { self.valid(epoch, type) }, upload: api.upload)
+            }
             UserDefaults.standard.set(data, forKey: "anchor.\(type.rawValue)")
             anchor = page.anchor
             nextTypeIndex = (all.firstIndex(of: type)! + 1) % all.count
@@ -330,12 +437,15 @@ import UIKit
               page.count == 0 ? "已检查最新变化" : "已确认上传"
             save()
             notice = nil
-            if page.count == 0 { break }
+            if page.count == 0 { unfinished.remove(type); break }
             if Date() >= deadline {
               shouldRetry = true
               break
             }
           } while valid(epoch, type)
+        } catch is SyncBudgetExpired {
+          shouldRetry = true
+          break
         } catch is CancellationError { break } catch {
           guard valid(epoch, type) else { break }
           let message: String
@@ -344,7 +454,7 @@ import UIKit
           } else if !UIApplication.shared.isProtectedDataAvailable {
             message = "iPhone 锁定时无法读取健康数据，解锁后继续"
           } else {
-            message = "本次尚未完成，将在网络恢复或下次打开时重试"
+            message = "本次尚未完成，请稍后重试同步"
           }
           preferences.progress[type.rawValue, default: .init()].message = message
           notice = message
@@ -353,7 +463,7 @@ import UIKit
           hadFailure = true
         }
       }
-      if Date() >= deadline { shouldRetry = true }
+      if !unfinished.isEmpty { shouldRetry = true }
       if shouldRetry && preferences.canSync && !Task.isCancelled {
         retryAttempt = hadFailure ? min(retryAttempt + 1, 5) : 0
         let delay = UInt64(hadFailure ? min(300, 5 * (1 << retryAttempt)) : 2)
@@ -361,7 +471,7 @@ import UIKit
         retryTask = Task {
           try? await Task.sleep(nanoseconds: delay * 1_000_000_000)
           guard !Task.isCancelled else { return }
-          startSync()
+          startSync(types: unfinished, trigger: .retry)
         }
       } else {
         retryAttempt = 0
@@ -379,3 +489,5 @@ import UIKit
     return try? NSKeyedUnarchiver.unarchivedObject(ofClass: HKQueryAnchor.self, from: data)
   }
 }
+
+private struct SyncBudgetExpired: Error {}

@@ -1,7 +1,7 @@
 import SwiftUI
 
 let sharingText =
-  "你选择的健康数据将发送到下方配置的服务器，保存在你自己的 Cloudflare 账号中。持有 MCP 只读 Token 的 AI Agent 可以查询已上传数据。你接入的 AI 服务可能按其自身政策处理这些数据。HealthBridge 不向开发者的服务器发送健康数据。你可随时撤回共享，停止之后的上传；已上传的数据仍可被 Agent 读取，需另行删除服务器数据或轮换 MCP Token。"
+  "你选择的步数和心率仅以小时汇总上传，首小时只包含共享起点之后的数据，跨越共享起点的步数样本可能不计入；睡眠、静息心率和心率变异性保留样本记录。数据将发送到下方配置的服务器，保存在你自己的 Cloudflare 账号中。持有 MCP 只读 Token 的 AI Agent 可以查询已上传数据。你接入的 AI 服务可能按其自身政策处理这些数据。HealthBridge 不向开发者的服务器发送健康数据。你可随时撤回共享，停止之后的上传；已上传的数据仍可被 Agent 读取，需另行删除服务器数据或轮换 MCP Token。"
 
 struct OnboardingView: View {
   var body: some View {
@@ -187,7 +187,7 @@ struct ConsentView: View {
         Image(systemName: "lock.shield.fill").font(.system(size: 48)).foregroundStyle(.blue)
         Text("允许共享健康数据？").font(.largeTitle.bold())
         Text(model.preferences.server).font(.footnote.monospaced()).textSelection(.enabled)
-        Text("所选健康数据会上传到此服务器，并可被你接入的 AI 服务读取。你可随时停止共享；已上传的数据需另行删除。").lineSpacing(4)
+        Text("步数和心率仅上传小时汇总，其他所选类型上传样本记录。数据会上传到此服务器，并可被你接入的 AI 服务读取。你可随时停止共享；已上传的数据需另行删除。").lineSpacing(4)
         NavigationLink("了解数据如何使用") {
           ScrollView { Text(sharingText).padding(24) }.navigationTitle("共享说明")
         }
@@ -271,7 +271,7 @@ struct PrivacyView: View {
   var body: some View {
     ScrollView {
       Text(
-        "HealthBridge 只读取你选择的健康数据，不修改 Apple 健康记录。概览在本机计算。\n\n仅在明确同意后，所选数据、样本时间、时区与来源会通过 HTTPS 发往你配置的服务器。上传 Token 保存在本机钥匙串。应用无广告、分析或第三方追踪 SDK。\n\n持有 MCP Token 的客户端可以读取服务器数据。请仅交给可信赖的 AI 服务，并检查其隐私政策。\n\n撤回同意停止后续上传；已上传的数据仍保留。你可以删除服务器数据、断开连接，或在自己的 Cloudflare 账号中轮换 Token。Cloudflare 的备份保留遵循其服务政策，逻辑删除不代表立即清除所有备份。\n\n系统健康授权可在 iPhone 设置中的健康数据访问页面管理。"
+        "HealthBridge 只读取你选择的健康数据，不修改 Apple 健康记录。概览在本机计算。\n\n仅在明确同意后，步数和心率只上传小时汇总、小时区间与时区，不上传单条样本或来源；睡眠、静息心率和心率变异性上传所选样本、时间、时区与来源。数据通过 HTTPS 发往你配置的服务器。上传 Token 保存在本机钥匙串。应用无广告、分析或第三方追踪 SDK。\n\n持有 MCP Token 的客户端可以读取服务器数据。请仅交给可信赖的 AI 服务，并检查其隐私政策。\n\n撤回同意停止后续上传；已上传的数据仍保留。你可以删除服务器数据、断开连接，或在自己的 Cloudflare 账号中轮换 Token。Cloudflare 的备份保留遵循其服务政策，逻辑删除不代表立即清除所有备份。\n\n系统健康授权可在 iPhone 设置中的健康数据访问页面管理。"
       ).padding(24).lineSpacing(6)
     }.navigationTitle("隐私说明")
   }

@@ -43,14 +43,99 @@ export const sampleSchema = z
     if (s.type === 'steps' && !Number.isSafeInteger(s.value))
       ctx.addIssue({ code: 'custom', message: 'steps must be a safe integer' });
   });
+const hourlyType = z.enum(['steps', 'heart_rate']);
+const hourTime = timestamp.refine(
+  (n) => n % 3600000 === 0,
+  'Use UTC hour boundaries',
+);
+const statistic = z
+  .number()
+  .finite()
+  .nonnegative()
+  .max(Number.MAX_SAFE_INTEGER);
+export const hourlySchema = z
+  .object({
+    type: hourlyType,
+    start_ms: hourTime,
+    end_ms: hourTime,
+    tz_min: z.number().int().min(-720).max(840),
+    coverage_start_ms: timestamp.optional(),
+    sum: statistic,
+    count: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+    min: statistic,
+    max: statistic,
+  })
+  .strict()
+  .superRefine((h, ctx) => {
+    if (
+      (h.coverage_start_ms !== undefined &&
+        (h.coverage_start_ms < h.start_ms ||
+          h.coverage_start_ms >= h.end_ms)) ||
+      h.end_ms !== h.start_ms + 3600000 ||
+      h.min > h.max ||
+      h.sum / h.count < h.min - 1e-8 ||
+      h.sum / h.count > h.max + 1e-8 ||
+      (h.type === 'steps' &&
+        (h.count !== 1 || h.min !== h.sum || h.max !== h.sum))
+    )
+      ctx.addIssue({ code: 'custom', message: 'Invalid hourly statistics' });
+  });
+export const hourlyRangeSchema = z
+  .object({
+    type: hourlyType,
+    start_ms: hourTime,
+    end_ms: hourTime,
+  })
+  .strict()
+  .refine((r) => r.end_ms > r.start_ms, 'Invalid replacement range');
+export type Hourly = z.infer<typeof hourlySchema>;
+export type HourlyRange = z.infer<typeof hourlyRangeSchema>;
 export const ingestSchema = z
   .object({
     schema_version: z.literal(1),
     added: z.array(sampleSchema).max(1000),
     deleted: z.array(z.uuid()).max(5000),
     types: z.array(typeSchema).max(5).optional(),
+    hourly: z.array(hourlySchema).max(1000).default([]),
+    hourly_ranges: z.array(hourlyRangeSchema).max(1000).default([]),
   })
-  .strict();
+  .strict()
+  .superRefine((batch, ctx) => {
+    const keys = new Set<string>();
+    for (const h of batch.hourly) {
+      const key = `${h.type}:${h.start_ms}`;
+      if (
+        keys.has(key) ||
+        !batch.hourly_ranges.some(
+          (r) =>
+            r.type === h.type &&
+            r.start_ms <= h.start_ms &&
+            r.end_ms >= h.end_ms,
+        )
+      )
+        ctx.addIssue({
+          code: 'custom',
+          message: 'Duplicate or uncovered hour',
+          path: ['hourly'],
+        });
+      keys.add(key);
+    }
+    for (const s of batch.added) {
+      if (
+        batch.hourly_ranges.some(
+          (r) =>
+            r.type === s.type &&
+            s.start_ms >= r.start_ms &&
+            s.start_ms < r.end_ms,
+        )
+      )
+        ctx.addIssue({
+          code: 'custom',
+          message: 'Raw sample conflicts with hourly replacement',
+          path: ['added'],
+        });
+    }
+  });
 export type Sample = z.infer<typeof sampleSchema>;
 export class InputError extends Error {}
 
