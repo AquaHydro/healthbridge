@@ -41,4 +41,17 @@ enum Keychain {
   static func clearPendingPair(matching token: String) throws {
     if try pendingPair()?.ingest == token { try draft.delete("pending") }
   }
+  static func pairingAttempt(for invitation: ConnectionInvitation) throws -> PairingAttempt {
+    if let data = try draft.read("pairing-attempt"),
+      let attempt = try? JSONDecoder().decode(PairingAttempt.self, from: data),
+      attempt.invitation == invitation
+    {
+      return attempt
+    }
+    let attempt = PairingAttempt(invitation: invitation, claimant: try TokenPair.generate().ingest)
+    try draft.save(JSONEncoder().encode(attempt), account: "pairing-attempt")
+    return attempt
+  }
+  static func clearPairingAttempt() throws { try draft.delete("pairing-attempt") }
+
 }

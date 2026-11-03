@@ -8,7 +8,9 @@
 
 /* Begin PBXBuildFile section */
 		226298BED5AA92F9A1A74CA2 /* ContractTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12ADDC82C73CA2F381094D92 /* ContractTests.swift */; };
+		2B7176E4CB908A63F936768A /* QuickConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96EF5DEBA67C7F685A376AB0 /* QuickConnection.swift */; };
 		3048D9B2BF96148B46F343A8 /* CredentialTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E5E3EFEB2BBEE7E08F78EA4 /* CredentialTests.swift */; };
+		32A66A42DC1709A0C75B36F3 /* QuickConnectView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6A1BE5A1851BC7FB4CCE4D1 /* QuickConnectView.swift */; };
 		474AFB9564DF6F8AAA5661A0 /* MCPConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 533F45008B76697A7CDC9DB2 /* MCPConnection.swift */; };
 		4F40CB5E00E4EE863B08F9A4 /* TokenSetupTestProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6CD17CD29D5516DCD112AF1B /* TokenSetupTestProtocol.swift */; };
 		5F47B19481BF70B1BA134E85 /* MainView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D790C92C669D539B51B9C23C /* MainView.swift */; };
@@ -17,6 +19,7 @@
 		7D0C0D164AA4702AA60F63E7 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8AEC3EBA6B25D4AA14FA24D4 /* AppModel.swift */; };
 		8D84A0E8A3FF355C1ACE12F9 /* CheckpointTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 585D1709C31DB30E6A4A10D0 /* CheckpointTests.swift */; };
 		8DD07C66176EC0FDC6E2D27B /* FlowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F5985A9F5043FD798639DC3 /* FlowTests.swift */; };
+		8F883E6629EA2DB11890EAF7 /* PairingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06AB514E7908D5FCE1B7D638 /* PairingTests.swift */; };
 		984AF0AB042A6CE9C71550F3 /* AgentHelpView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A3ECEB18F5644AA05D1EEC4 /* AgentHelpView.swift */; };
 		98517E12DC52DA5D58D16813 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBD49A5A2BDB6A19EE2735BC /* Models.swift */; };
 		9BDF446C96281FFC0DF8A950 /* HealthBridgeApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD20CB6D9ECD8580A75AC516 /* HealthBridgeApp.swift */; };
@@ -47,6 +50,7 @@
 
 /* Begin PBXFileReference section */
 		02AC71CF4B748F47B17F6C14 /* HealthBridge.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = HealthBridge.entitlements; sourceTree = "<group>"; };
+		06AB514E7908D5FCE1B7D638 /* PairingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingTests.swift; sourceTree = "<group>"; };
 		09B31AEF38898A107BF7BBB9 /* HealthBridgeUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = HealthBridgeUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		0DFBD63A484DA3F649D6B0E6 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		12ADDC82C73CA2F381094D92 /* ContractTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContractTests.swift; sourceTree = "<group>"; };
@@ -62,10 +66,13 @@
 		6CD17CD29D5516DCD112AF1B /* TokenSetupTestProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TokenSetupTestProtocol.swift; sourceTree = "<group>"; };
 		7192E7F9B3523FE022BC86DD /* Credentials.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Credentials.swift; sourceTree = "<group>"; };
 		8AEC3EBA6B25D4AA14FA24D4 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
+		96EF5DEBA67C7F685A376AB0 /* QuickConnection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickConnection.swift; sourceTree = "<group>"; };
 		9F5985A9F5043FD798639DC3 /* FlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlowTests.swift; sourceTree = "<group>"; };
 		AD20CB6D9ECD8580A75AC516 /* HealthBridgeApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthBridgeApp.swift; sourceTree = "<group>"; };
 		BBD49A5A2BDB6A19EE2735BC /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
+		C906A15FBB198A03265ABBD0 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		D37E3E35AC931FAF3222564B /* ServerAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerAPI.swift; sourceTree = "<group>"; };
+		D6A1BE5A1851BC7FB4CCE4D1 /* QuickConnectView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickConnectView.swift; sourceTree = "<group>"; };
 		D790C92C669D539B51B9C23C /* MainView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainView.swift; sourceTree = "<group>"; };
 		F808E2F673832911E8358643 /* Keychain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Keychain.swift; sourceTree = "<group>"; };
 		FA8E1272016F4F8EDE6E8E5A /* PageTransfer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageTransfer.swift; sourceTree = "<group>"; };
@@ -106,6 +113,7 @@
 				585D1709C31DB30E6A4A10D0 /* CheckpointTests.swift */,
 				12ADDC82C73CA2F381094D92 /* ContractTests.swift */,
 				2E5E3EFEB2BBEE7E08F78EA4 /* CredentialTests.swift */,
+				06AB514E7908D5FCE1B7D638 /* PairingTests.swift */,
 			);
 			path = HealthBridgeTests;
 			sourceTree = "<group>";
@@ -120,12 +128,15 @@
 				02AC71CF4B748F47B17F6C14 /* HealthBridge.entitlements */,
 				AD20CB6D9ECD8580A75AC516 /* HealthBridgeApp.swift */,
 				54FD19CB35CAFFC8D0E5DAE0 /* HealthStore.swift */,
+				C906A15FBB198A03265ABBD0 /* Info.plist */,
 				F808E2F673832911E8358643 /* Keychain.swift */,
 				D790C92C669D539B51B9C23C /* MainView.swift */,
 				533F45008B76697A7CDC9DB2 /* MCPConnection.swift */,
 				BBD49A5A2BDB6A19EE2735BC /* Models.swift */,
 				2E5ECF2C2AE375EFAC2DFCA8 /* OnboardingView.swift */,
 				FA8E1272016F4F8EDE6E8E5A /* PageTransfer.swift */,
+				96EF5DEBA67C7F685A376AB0 /* QuickConnection.swift */,
+				D6A1BE5A1851BC7FB4CCE4D1 /* QuickConnectView.swift */,
 				D37E3E35AC931FAF3222564B /* ServerAPI.swift */,
 				6CD17CD29D5516DCD112AF1B /* TokenSetupTestProtocol.swift */,
 				274924FCEFA409B3C649CA7D /* TokenSetupView.swift */,
@@ -262,6 +273,8 @@
 				98517E12DC52DA5D58D16813 /* Models.swift in Sources */,
 				9D2ED4B488A40DB6B4E65807 /* OnboardingView.swift in Sources */,
 				762A1BC5B0DEA9DA09859715 /* PageTransfer.swift in Sources */,
+				32A66A42DC1709A0C75B36F3 /* QuickConnectView.swift in Sources */,
+				2B7176E4CB908A63F936768A /* QuickConnection.swift in Sources */,
 				7510ED65F56C78A562B7A7D6 /* ServerAPI.swift in Sources */,
 				4F40CB5E00E4EE863B08F9A4 /* TokenSetupTestProtocol.swift in Sources */,
 				F8652BA7BCBE0C33FF1F1A72 /* TokenSetupView.swift in Sources */,
@@ -275,6 +288,7 @@
 				8D84A0E8A3FF355C1ACE12F9 /* CheckpointTests.swift in Sources */,
 				226298BED5AA92F9A1A74CA2 /* ContractTests.swift in Sources */,
 				3048D9B2BF96148B46F343A8 /* CredentialTests.swift in Sources */,
+				8F883E6629EA2DB11890EAF7 /* PairingTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -308,7 +322,9 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = HealthBridge/HealthBridge.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				INFOPLIST_FILE = HealthBridge/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = HealthBridge;
+				INFOPLIST_KEY_NSCameraUsageDescription = "扫描你的服务器连接码。";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "读取你选择的健康数据，在本机显示概览；仅在你明确同意后，将数据同步到你自己的服务器，供你连接的 AI Agent 查询。";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -526,7 +542,9 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = HealthBridge/HealthBridge.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				INFOPLIST_FILE = HealthBridge/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = HealthBridge;
+				INFOPLIST_KEY_NSCameraUsageDescription = "扫描你的服务器连接码。";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "读取你选择的健康数据，在本机显示概览；仅在你明确同意后，将数据同步到你自己的服务器，供你连接的 AI Agent 查询。";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

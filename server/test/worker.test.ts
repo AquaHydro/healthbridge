@@ -5,6 +5,7 @@ import {
   StreamableHTTPClientTransport,
 } from '@modelcontextprotocol/client';
 import migration from '../migrations/0001_init.sql?raw';
+import pairingMigration from '../migrations/0002_pairing.sql?raw';
 import { time, range } from '../src/schema';
 import { status } from '../src/data';
 type Status = Awaited<ReturnType<typeof status>>;
@@ -56,7 +57,7 @@ function textResult(r: Awaited<ReturnType<Client['callTool']>>) {
   return JSON.parse(content[0]!.text!);
 }
 beforeAll(async () => {
-  const sql = migration;
+  const sql = migration + '\n' + pairingMigration;
   await env.DB.batch(
     sql
       .split(';')
@@ -68,10 +69,13 @@ beforeEach(async () => {
   await env.DB.batch([
     env.DB.prepare('DELETE FROM samples'),
     env.DB.prepare('DELETE FROM meta'),
+    env.DB.prepare('DELETE FROM pairing_tickets'),
+    env.DB.prepare('DELETE FROM pairing_owners'),
+    env.DB.prepare('DELETE FROM pairing_attempts'),
   ]);
 });
 describe('HTTP and D1 contract', () => {
-  it.each(['/', '/healthz', '/v1/ping', '/v1/ingest', '/v1/data', '/mcp'])(
+  it.each(['/healthz', '/v1/ping', '/v1/ingest', '/v1/data', '/mcp'])(
     'requires auth on %s',
     async (path) =>
       expect((await fetcher(path, 'GET', 'wrong')).status).toBe(401),
@@ -384,5 +388,128 @@ describe('timezone and transport edge cases', () => {
     const next = summarizeSleep(data as never, '2026-11-04', '2026-11-05');
     expect(next[0]?.source).toBe('Long');
     expect(next[0]?.total_sleep_minutes).toBe(120);
+  });
+});
+
+describe('first-install pairing', () => {
+  const password = 'synthetic-connection-password-test-only';
+  async function create() {
+    return fetcher('/v1/pairing/create', 'POST', '', { password });
+  }
+  async function ticket() {
+    const r = await create();
+    expect(r.status).toBe(200);
+    const data = await r.json<{ link: string; qr: string }>();
+    const payload = JSON.parse(
+      atob(data.link.split('#')[1]!.replaceAll('-', '+').replaceAll('_', '/')),
+    );
+    return { data, code: payload.code as string };
+  }
+  const claimant = 'b'.repeat(64);
+  it('serves a non-sensitive setup page with strict browser protections', async () => {
+    const r = await fetcher('/', 'GET', '');
+    expect(r.status).toBe(200);
+    expect(r.headers.get('cache-control')).toBe('no-store');
+    expect(r.headers.get('content-security-policy')).toContain(
+      "frame-ancestors 'none'",
+    );
+    const html = await r.text();
+    expect(html).not.toContain(password);
+    expect(html).not.toContain(writer);
+    expect(html).not.toContain(reader);
+  });
+  it('requires the deployment password, not either long-lived token', async () => {
+    for (const value of ['wrong', reader, writer])
+      expect(
+        (await fetcher('/v1/pairing/create', 'POST', '', { password: value }))
+          .status,
+      ).toBe(401);
+  });
+  it('exchanges a short-lived link exactly once, supports same-client retry and closes bootstrap', async () => {
+    const { data, code } = await ticket();
+    expect(data.qr).toContain('<svg');
+    expect(data.link).not.toContain(writer);
+    expect(data.link).not.toContain(reader);
+    const redeem = () =>
+      fetcher('/v1/pairing/redeem', 'POST', '', { code, claimant });
+    const response = await redeem();
+    expect(response.status).toBe(200);
+    const body = await response.json<{
+      ingest_token: string;
+      mcp_token: string;
+    }>();
+    expect(body.ingest_token).toBe(writer);
+    expect(body.mcp_token).toBe(reader);
+    expect((await redeem()).status).toBe(200);
+    expect(
+      (
+        await fetcher('/v1/pairing/redeem', 'POST', '', {
+          code,
+          claimant: 'c'.repeat(64),
+        })
+      ).status,
+    ).toBe(410);
+    expect((await create()).status).toBe(409);
+  });
+  it('only one concurrent device wins', async () => {
+    const { code } = await ticket();
+    const results = await Promise.all(
+      ['c', 'd'].map((x) =>
+        fetcher('/v1/pairing/redeem', 'POST', '', {
+          code,
+          claimant: x.repeat(64),
+        }),
+      ),
+    );
+    expect(results.map((r) => r.status).sort()).toEqual([200, 410]);
+  });
+  it('expires tickets, replaces unclaimed links, and does not reset owner when deleting health data', async () => {
+    const old = await ticket();
+    const fresh = await ticket();
+    expect(
+      (
+        await fetcher('/v1/pairing/redeem', 'POST', '', {
+          code: old.code,
+          claimant,
+        })
+      ).status,
+    ).toBe(410);
+    await env.DB.prepare('UPDATE pairing_tickets SET expires_ms=0').run();
+    expect(
+      (
+        await fetcher('/v1/pairing/redeem', 'POST', '', {
+          code: fresh.code,
+          claimant,
+        })
+      ).status,
+    ).toBe(410);
+    const current = await ticket();
+    expect(
+      (
+        await fetcher('/v1/pairing/redeem', 'POST', '', {
+          code: current.code,
+          claimant,
+        })
+      ).status,
+    ).toBe(200);
+    await fetcher('/v1/data', 'DELETE');
+    expect((await create()).status).toBe(409);
+  });
+  it('limits password guessing and rejects cross-origin browser requests', async () => {
+    for (let i = 0; i < 10; i++)
+      await fetcher('/v1/pairing/create', 'POST', '', { password: 'wrong' });
+    expect((await create()).status).toBe(429);
+    const r = await exports.default.fetch(
+      'https://example.test/v1/pairing/create',
+      {
+        method: 'POST',
+        headers: {
+          Origin: 'https://foreign.test',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ password }),
+      },
+    );
+    expect(r.status).toBe(403);
   });
 });

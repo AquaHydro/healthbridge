@@ -13,6 +13,7 @@ import UIKit
   var serverStatus: ServerStatus?
   var selectedTab = 0
   var connectionSheet = false
+  var incomingInvitation: ConnectionInvitation?
   var consentSheet = false
   let health = HealthStore()
   private var observers: [HealthType: HKObserverQuery] = [:]
@@ -37,6 +38,14 @@ import UIKit
       if args.contains("--ui-test") {
         preferences = Preferences()
         preferences.onboarded = !args.contains("--ui-intro")
+        if args.contains("--ui-pair") {
+          preferences.onboarded = false
+          let payload = try! JSONSerialization.data(withJSONObject: [
+            "v": 1, "server": "https://example.invalid", "code": String(repeating: "a", count: 64),
+          ])
+          incomingInvitation = try? ConnectionInvitation.parse(
+            "healthbridge://connect#" + payload.base64EncodedString())
+        }
         if args.contains("--ui-agent") {
           preferences.server = "https://example.invalid"
           selectedTab = 2

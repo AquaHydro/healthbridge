@@ -18,11 +18,18 @@ targets:
     type: application
     platform: iOS
     sources: [HealthBridge]
+    info:
+      path: HealthBridge/Info.plist
+      properties:
+        CFBundleURLTypes:
+          - CFBundleURLName: app.yiliang.healthbridge.connect
+            CFBundleURLSchemes: [healthbridge]
     settings:
       base:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         PRODUCT_BUNDLE_IDENTIFIER: app.yiliang.healthbridge
         INFOPLIST_KEY_CFBundleDisplayName: HealthBridge
+        INFOPLIST_KEY_NSCameraUsageDescription: '扫描你的服务器连接码。'
         INFOPLIST_KEY_NSHealthShareUsageDescription: '读取你选择的健康数据，在本机显示概览；仅在你明确同意后，将数据同步到你自己的服务器，供你连接的 AI Agent 查询。'
         INFOPLIST_KEY_UISupportedInterfaceOrientations: 'UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight'
         INFOPLIST_KEY_UILaunchScreen_Generation: YES

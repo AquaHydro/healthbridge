@@ -8,6 +8,17 @@
     }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
     override func startLoading() {
+      if request.url?.path == "/v1/pairing/redeem" {
+        let body =
+          "{\"ok\":true,\"ingest_token\":\"synthetic-writer-test\",\"mcp_token\":\"synthetic-reader-test\",\"status\":{\"ok\":true,\"version\":\"0.1.0\",\"schema_version\":1,\"counts\":{}}}"
+        let response = HTTPURLResponse(
+          url: request.url!, statusCode: 200, httpVersion: nil,
+          headerFields: ["Content-Type": "application/json"])!
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: Data(body.utf8))
+        client?.urlProtocolDidFinishLoading(self)
+        return
+      }
       let allowed =
         request.value(forHTTPHeaderField: "Authorization") == "Bearer synthetic-reader-test"
       let body =

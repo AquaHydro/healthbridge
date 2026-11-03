@@ -1,3 +1,0 @@
-# Synthetic local-only credentials. Never use these on a public Worker.
-INGEST_TOKEN=synthetic-local-ingest-change-before-deploy
-MCP_TOKEN=synthetic-local-mcp-change-before-deploy

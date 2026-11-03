@@ -1,3 +1,12 @@
+import { runtimeTokens } from './credentials';
+import {
+  createTicket,
+  redeemTicket,
+  pairingCreateSchema,
+  pairingRedeemSchema,
+  pairingHeaders,
+} from './pairing';
+import { connectionPage } from './connection-page';
 import { clear, ingest, status } from './data';
 import { mcp } from './mcp';
 import { ingestSchema, typeSchema } from './schema';
@@ -19,8 +28,8 @@ async function equal(a: string, b: string) {
   ]);
   return crypto.subtle.timingSafeEqual(x, y);
 }
-async function body(request: Request) {
-  if (Number(request.headers.get('content-length') ?? 0) > MAX_BODY)
+async function body(request: Request, limit = MAX_BODY) {
+  if (Number(request.headers.get('content-length') ?? 0) > limit)
     throw new RangeError();
   const reader = request.body?.getReader();
   if (!reader) return '';
@@ -31,7 +40,7 @@ async function body(request: Request) {
     const { done, value } = await reader.read();
     if (done) break;
     size += value.length;
-    if (size > MAX_BODY) {
+    if (size > limit) {
       await reader.cancel();
       throw new RangeError();
     }
@@ -47,13 +56,64 @@ export default {
   ): Promise<Response> {
     const url = new URL(request.url),
       path = url.pathname;
-    if (
-      !env.INGEST_TOKEN ||
-      !env.MCP_TOKEN ||
-      (await equal(env.INGEST_TOKEN, env.MCP_TOKEN))
-    )
+    const tokens = runtimeTokens(env);
+    if (!tokens || (await equal(tokens.ingest, tokens.mcp)))
       return json({ error: 'server_not_configured' }, 503);
-    const expected = path === '/mcp' ? env.MCP_TOKEN : env.INGEST_TOKEN;
+    if ((path === '/' || path === '/connect') && request.method === 'GET')
+      return connectionPage();
+    if (path === '/v1/pairing/create' || path === '/v1/pairing/redeem') {
+      if (request.method !== 'POST')
+        return json({ error: 'method_not_allowed' }, 405);
+      const origin = request.headers.get('Origin');
+      if (origin && origin !== url.origin)
+        return json({ error: 'origin_not_allowed' }, 403);
+      if (
+        !request.headers
+          .get('content-type')
+          ?.toLowerCase()
+          .startsWith('application/json')
+      )
+        return json({ error: 'json_required' }, 415);
+      if (Number(request.headers.get('content-length') ?? 0) > 8192)
+        return json({ error: 'body_too_large' }, 413);
+      try {
+        const text = await body(request, 8192);
+        if (text.length > 8192) return json({ error: 'body_too_large' }, 413);
+        const input: unknown = JSON.parse(text);
+        const ip = request.headers.get('CF-Connecting-IP') ?? 'local';
+        if (path === '/v1/pairing/create') {
+          const parsed = pairingCreateSchema.safeParse(input);
+          return parsed.success
+            ? await createTicket(env, url.origin, parsed.data.password, ip)
+            : json({ error: 'invalid_request' }, 400);
+        }
+        const parsed = pairingRedeemSchema.safeParse(input);
+        return parsed.success
+          ? await redeemTicket(env, parsed.data.code, parsed.data.claimant, ip)
+          : json({ error: 'invalid_request' }, 400);
+      } catch (e) {
+        return Response.json(
+          {
+            error:
+              e instanceof SyntaxError
+                ? 'invalid_json'
+                : e instanceof RangeError
+                  ? 'body_too_large'
+                  : 'setup_unavailable',
+          },
+          {
+            status:
+              e instanceof SyntaxError
+                ? 400
+                : e instanceof RangeError
+                  ? 413
+                  : 503,
+            headers: pairingHeaders,
+          },
+        );
+      }
+    }
+    const expected = path === '/mcp' ? tokens.mcp : tokens.ingest;
     const auth = request.headers.get('Authorization') ?? '';
     if (!auth.startsWith('Bearer ') || !(await equal(auth.slice(7), expected)))
       return json({ error: 'unauthorized' }, 401);

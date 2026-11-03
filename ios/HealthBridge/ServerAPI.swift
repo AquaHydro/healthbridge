@@ -33,6 +33,8 @@ struct ServerAPI {
     defer { session.finishTasksAndInvalidate() }
     let (data, response) = try await session.data(for: request)
     guard let http = response as? HTTPURLResponse else { throw BridgeError.unavailable }
+    if http.statusCode == 410 { throw PairingError.expired }
+    if http.statusCode == 429 { throw PairingError.unavailable }
     if http.statusCode == 401 { throw BridgeError.unauthorized }
     guard http.statusCode == 200 else { throw BridgeError.unavailable }
     return try JSONDecoder().decode(T.self, from: data)

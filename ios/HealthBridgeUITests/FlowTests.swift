@@ -15,9 +15,10 @@ final class FlowTests: XCTestCase {
   }
   func testIntroAndInvalidConnection() {
     let app = launch(["--ui-intro"])
-    XCTAssertTrue(app.buttons["连接我的服务器"].waitForExistence(timeout: 5))
+    XCTAssertTrue(app.buttons["开始连接"].waitForExistence(timeout: 5))
     capture("01-intro")
-    app.buttons["连接我的服务器"].tap()
+    app.buttons["开始连接"].tap()
+    app.buttons["手动连接"].tap()
     XCTAssertTrue(app.textFields["serverURL"].waitForExistence(timeout: 3))
     XCTAssertFalse(app.buttons["继续"].isEnabled)
     app.textFields["serverURL"].tap()
@@ -85,7 +86,9 @@ final class FlowTests: XCTestCase {
 extension FlowTests {
   func testGenerateAndResumeTokenDraft() {
     let app = launch(["--ui-intro"])
-    app.buttons["连接我的服务器"].tap()
+    app.buttons["开始连接"].tap()
+    app.buttons["手动连接"].tap()
+    if !app.buttons["生成新 Token"].exists { app.buttons["高级配置"].tap() }
     app.buttons["生成新 Token"].tap()
     XCTAssertTrue(app.buttons["generateTokens"].waitForExistence(timeout: 3))
     if app.buttons["generateTokens"].label == "重新生成" {
@@ -99,6 +102,7 @@ extension FlowTests {
     app.buttons["复制 MCP_TOKEN"].tap()
     app.buttons["关闭"].tap()
     XCTAssertFalse(app.buttons["继续"].isEnabled)
+    if !app.buttons["生成新 Token"].exists { app.buttons["高级配置"].tap() }
     app.buttons["生成新 Token"].tap()
     XCTAssertTrue(app.buttons["复制 INGEST_TOKEN"].waitForExistence(timeout: 3))
     if !app.buttons["useGeneratedTokens"].isHittable { app.swipeUp() }
@@ -123,5 +127,26 @@ extension FlowTests {
     XCTAssertTrue(app.buttons["copyAgentConfig"].waitForExistence(timeout: 3))
     app.buttons["copyAgentConfig"].tap()
     capture("18-agent-copy")
+  }
+}
+
+extension FlowTests {
+  func testQuickConnectionStopsAtExplicitSharingConsent() {
+    let app = launch(["--ui-pair", "--ui-token-network"])
+    XCTAssertTrue(app.buttons["redeemConnection"].waitForExistence(timeout: 5))
+    capture("19-quick-connect")
+    app.buttons["redeemConnection"].tap()
+    XCTAssertTrue(app.staticTexts["允许共享健康数据？"].waitForExistence(timeout: 5))
+    XCTAssertTrue(app.buttons["同意并继续"].exists)
+    capture("20-sharing-consent")
+  }
+  func testFirstInstallHasQuickActionsAndAdvancedFallback() {
+    let app = launch(["--ui-intro"])
+    XCTAssertTrue(app.buttons["开始连接"].waitForExistence(timeout: 5))
+    capture("21-first-install")
+    app.buttons["开始连接"].tap()
+    XCTAssertTrue(app.buttons["扫描连接码"].waitForExistence(timeout: 3))
+    XCTAssertFalse(app.secureTextFields["ingestToken"].exists)
+    capture("22-quick-actions")
   }
 }

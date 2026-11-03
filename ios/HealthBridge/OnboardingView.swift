@@ -4,52 +4,18 @@ let sharingText =
   "你选择的健康数据将发送到下方配置的服务器，保存在你自己的 Cloudflare 账号中。持有 MCP 只读 Token 的 AI Agent 可以查询已上传数据。你接入的 AI 服务可能按其自身政策处理这些数据。HealthBridge 不向开发者的服务器发送健康数据。你可随时撤回共享，停止之后的上传；已上传的数据仍可被 Agent 读取，需另行删除服务器数据或轮换 MCP Token。"
 
 struct OnboardingView: View {
-  @Environment(AppModel.self) private var model
-  @State private var local = false
   var body: some View {
     NavigationStack {
-      ScrollView {
-        VStack(alignment: .leading, spacing: 28) {
-          VStack(spacing: 14) {
-            Image(systemName: "heart.text.clipboard.fill").font(.system(size: 56)).foregroundStyle(
-              .blue
-            ).frame(width: 94, height: 94).background(
-              .blue.opacity(0.09), in: RoundedRectangle(cornerRadius: 24))
-            Text("欢迎使用 HealthBridge").font(.largeTitle.bold()).multilineTextAlignment(.center)
-            Text("让 AI 了解你的健康，数据由你掌控。").foregroundStyle(.secondary).multilineTextAlignment(.center)
-          }.frame(maxWidth: .infinity)
-          HStack {
-            flow("iphone", "iPhone")
-            Image(systemName: "arrow.right")
-            flow("cloud", "你的 Cloudflare")
-            Image(systemName: "arrow.right")
-            flow("sparkles", "AI Agent")
-          }.foregroundStyle(.secondary).padding().background(
-            .background, in: RoundedRectangle(cornerRadius: 16))
-          feature("lock.shield", "数据由你掌控", "只同步到你配置的服务器，随时停止共享。")
-          feature("heart", "先在本机查看", "睡眠、心率与步数概览直接读取 Apple 健康。")
-          feature("arrow.triangle.2.circlepath", "自动增量同步", "后台频率由 iOS 决定，锁屏后通常在解锁时补齐。")
-          NavigationLink("连接我的服务器") { ConnectionView(onboarding: true) }.buttonStyle(
-            PrimaryButton())
-          NavigationLink("仅在本机查看") { TypeSelectionView(onboarding: true) }.frame(
-            maxWidth: .infinity)
-        }.padding(20)
-      }.background(Color(.systemGroupedBackground)).navigationBarTitleDisplayMode(.inline)
-    }
-  }
-  private func flow(_ icon: String, _ text: String) -> some View {
-    VStack(spacing: 8) {
-      Image(systemName: icon).font(.title2)
-      Text(text).font(.caption).multilineTextAlignment(.center)
-    }.frame(maxWidth: .infinity)
-  }
-  private func feature(_ icon: String, _ title: String, _ text: String) -> some View {
-    HStack(alignment: .top, spacing: 14) {
-      Image(systemName: icon).font(.title2).foregroundStyle(.blue).frame(width: 30)
-      VStack(alignment: .leading, spacing: 5) {
-        Text(title).font(.headline)
-        Text(text).font(.subheadline).foregroundStyle(.secondary)
-      }
+      VStack(spacing: 24) {
+        Spacer()
+        Image(systemName: "heart.text.clipboard.fill").font(.system(size: 64)).foregroundStyle(
+          .blue)
+        Text("让健康数据连上 AI").font(.largeTitle.bold()).multilineTextAlignment(.center)
+        Text("数据存放在你的 Cloudflare。").foregroundStyle(.secondary)
+        Spacer()
+        NavigationLink("开始连接") { QuickConnectView(onboarding: true) }.buttonStyle(PrimaryButton())
+        NavigationLink("仅在本机查看") { TypeSelectionView(onboarding: true) }.padding(.bottom, 24)
+      }.padding(24).background(Color(.systemGroupedBackground))
     }
   }
 }
@@ -80,10 +46,10 @@ struct ConnectionView: View {
   @State private var advance = false
   var body: some View {
     Form {
-      Section { Text("填写你自己的服务器地址和写入 Token。测试连接不会发送健康数据。").foregroundStyle(.secondary) }
+      Section { Text("连接不会上传健康数据。").foregroundStyle(.secondary) }
       Section {
-        Button("生成新 Token") { showGeneration = true }
-        Text("首次部署可在这里生成；已有服务器请填写现有 Token。生成后需配置到 Cloudflare 才会生效。").font(.footnote)
+        DisclosureGroup("高级配置") { Button("生成新 Token") { showGeneration = true } }
+        Text("填写已有服务器的凭据。").font(.footnote)
           .foregroundStyle(.secondary)
       }
       Section("服务器") {
@@ -134,7 +100,7 @@ struct ConnectionView: View {
         Button("继续") { Task { await next() } }.disabled(result == nil || busy)
         NavigationLink("如何部署服务器") { DeploymentHelpView() }
       } footer: {
-        Text("两种 Token 分开保存在本机钥匙串。连接通过后才启用；生成草稿不会替换现有连接。")
+        Text("凭据仅保存在本机钥匙串。")
       }
     }.navigationTitle("连接服务器")
       .onAppear {
@@ -219,9 +185,12 @@ struct ConsentView: View {
     ScrollView {
       VStack(alignment: .leading, spacing: 24) {
         Image(systemName: "lock.shield.fill").font(.system(size: 48)).foregroundStyle(.blue)
-        Text("共享健康数据前，请确认").font(.largeTitle.bold())
+        Text("允许共享健康数据？").font(.largeTitle.bold())
         Text(model.preferences.server).font(.footnote.monospaced()).textSelection(.enabled)
-        Text(sharingText).lineSpacing(6)
+        Text("所选健康数据会上传到此服务器，并可被你接入的 AI 服务读取。你可随时停止共享；已上传的数据需另行删除。").lineSpacing(4)
+        NavigationLink("了解数据如何使用") {
+          ScrollView { Text(sharingText).padding(24) }.navigationTitle("共享说明")
+        }
         NavigationLink("阅读隐私说明") { PrivacyView() }
         Button("同意并继续") {
           model.grantConsent()
@@ -288,6 +257,7 @@ struct TypeSelectionView: View {
             if model.preferences.onboarded {
               model.connectionSheet = false
               model.consentSheet = false
+              model.incomingInvitation = nil
               model.selectedTab = model.preferences.canSync ? 1 : 0
             }
           }

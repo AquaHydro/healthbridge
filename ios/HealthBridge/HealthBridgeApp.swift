@@ -19,6 +19,7 @@ import UIKit
   @State private var model = AppModel.shared
   var body: some Scene {
     WindowGroup {
+      @Bindable var model = model
       Group { if model.preferences.onboarded { MainView() } else { OnboardingView() } }
         .environment(model)
         .environment(\.locale, Locale(identifier: "zh_CN"))
@@ -30,6 +31,23 @@ import UIKit
             Text("界面测试 · 合成数据").font(.caption).foregroundStyle(.secondary).dynamicTypeSize(
               ...DynamicTypeSize.large)
           }
+        }
+        .onOpenURL { url in
+          if let invitation = try? ConnectionInvitation.parse(url.absoluteString) {
+            model.connectionSheet = false
+            model.consentSheet = false
+            model.incomingInvitation = invitation
+          }
+        }
+        .sheet(item: $model.incomingInvitation) { invitation in
+          NavigationStack {
+            QuickConnectView(onboarding: !model.preferences.onboarded, invitation: invitation)
+              .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                  Button("取消") { model.incomingInvitation = nil }
+                }
+              }
+          }.environment(model)
         }
         .onChange(of: phase) { _, value in
           if value == .active && model.preferences.onboarded { model.foreground() }

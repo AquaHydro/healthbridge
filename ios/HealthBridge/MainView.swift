@@ -14,7 +14,7 @@ struct MainView: View {
       NavigationStack { SettingsView() }.tabItem { Label("设置", systemImage: "gearshape") }.tag(2)
     }.sheet(isPresented: $model.connectionSheet) {
       NavigationStack {
-        ConnectionView().toolbar {
+        QuickConnectView().toolbar {
           ToolbarItem(placement: .cancellationAction) {
             Button("取消") { model.connectionSheet = false }
           }

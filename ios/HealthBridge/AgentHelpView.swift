@@ -8,6 +8,7 @@ struct AgentHelpView: View {
   @State private var client = AgentClient.codex
   @State private var includeToken = true
   @State private var busy = false
+  @State private var manageToken = false
   @State private var message: String?
   private var url: URL? { try? ServerAPI.normalizedURL(model.preferences.server) }
   private var canCopyToken: Bool {
@@ -16,14 +17,11 @@ struct AgentHelpView: View {
   var body: some View {
     Form {
       if let url {
-        Section("MCP 地址") {
-          Text(url.appendingPathComponent("mcp").absoluteString).font(.footnote.monospaced())
-            .textSelection(.enabled)
-          Button("复制 MCP 地址") {
-            copy(url.appendingPathComponent("mcp").absoluteString, label: "MCP 地址")
-          }
-        }
-        Section {
+        Section { Label(url.host ?? "已连接", systemImage: "lock.shield") }
+        DisclosureGroup(
+          "管理只读凭据",
+          isExpanded: Binding(get: { saved == nil || manageToken }, set: { manageToken = $0 })
+        ) {
           SecureField("MCP_TOKEN", text: $input).textContentType(.init(rawValue: ""))
             .textInputAutocapitalization(.never)
             .autocorrectionDisabled().accessibilityIdentifier("mcpToken")
@@ -42,19 +40,11 @@ struct AgentHelpView: View {
           if canCopyToken { Label("只读连接已验证", systemImage: "checkmark.shield") }
           Button("复制只读 Token") { if let saved { copy(saved, label: "只读 Token") } }.disabled(
             !canCopyToken)
-        } header: {
-          Text("只读 Token")
-        } footer: {
-          Text("导入部署时的 MCP_TOKEN，验证后按服务器分别保存在钥匙串。此页面不会复制写入 Token，也不会调用健康查询工具。")
         }
         Section("客户端配置") {
           Picker("客户端", selection: $client) {
             ForEach(AgentClient.allCases) { Text($0.rawValue).tag($0) }
           }
-          Toggle("复制时包含只读 Token", isOn: $includeToken)
-          Text((try? client.configuration(origin: url, token: nil)) ?? "").font(
-            .caption.monospaced()
-          ).textSelection(.enabled)
           Button(includeToken ? "复制完整配置" : "复制配置模板") {
             do {
               copy(
@@ -62,12 +52,18 @@ struct AgentHelpView: View {
                 label: includeToken ? "完整配置" : "配置模板")
             } catch { message = "无法生成配置，请检查 Token。" }
           }.disabled(includeToken && !canCopyToken).accessibilityIdentifier("copyAgentConfig")
-          Text("预览始终隐藏 Token。包含 Token 的配置只粘贴到自己的客户端私有配置中，不要提交到 Git。复制内容 2 分钟后过期。").font(.footnote)
-            .foregroundStyle(.secondary)
-          if client == .codex { Text("粘贴到个人 config.toml。若已存在 healthbridge 配置，请替换对应段落。") }
-          if client == .claude { Text("合并到 Claude Code 的个人 MCP 配置，保留其他服务器条目。") }
-          if client == .generic {
-            Text("用于支持 Streamable HTTP 和自定义 Authorization 头的客户端；字段位置按客户端要求调整。")
+          Text("只读配置，仅粘贴到你自己的客户端。").font(.footnote).foregroundStyle(.secondary)
+          DisclosureGroup("更多选项") {
+            Toggle("包含只读凭据", isOn: $includeToken)
+            DisclosureGroup("查看配置") {
+              Text((try? client.configuration(origin: url, token: nil)) ?? "").font(
+                .caption.monospaced()
+              ).textSelection(.enabled)
+            }
+            Button("复制 MCP 地址") {
+              copy(url.appendingPathComponent("mcp").absoluteString, label: "地址")
+            }
+            Text("配置预览隐藏凭据，复制内容 2 分钟后过期。")
           }
         }
       } else {
@@ -82,11 +78,7 @@ struct AgentHelpView: View {
           Text(message).foregroundStyle(.secondary).accessibilityIdentifier("agentFeedback")
         }
       }
-      Section("只读查询") {
-        Text(
-          "先调用 get_sync_status 检查数据新鲜度，再调用 query_samples、aggregate 或 sleep_summary。仅支持 OAuth 的连接器不能直接使用此 Token。"
-        )
-      }
+
     }.navigationTitle("连接 AI Agent")
       .task(id: model.preferences.server) {
         saved = nil
@@ -116,6 +108,7 @@ struct AgentHelpView: View {
       guard input == submitted && model.preferences.server == server else { return }
       try Keychain.saveMCP(token, for: url)
       input = token
+      manageToken = true
       saved = token
       savedOrigin = CredentialRules.origin(url)
       message = "只读 Token 已验证并安全保存。"

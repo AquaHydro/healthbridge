@@ -1,0 +1,22 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "healthbridge",
+  "main": "server/src/index.ts",
+  "compatibility_date": "2026-11-03",
+  "compatibility_flags": ["nodejs_compat"],
+  "send_metrics": false,
+  "workers_dev": true,
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "healthbridge-db",
+      "migrations_dir": "server/migrations",
+    },
+  ],
+  "observability": {
+    "enabled": false,
+  },
+  "secrets": {
+    "required": ["CONNECT_PASSWORD"],
+  },
+}
