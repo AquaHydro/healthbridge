@@ -8,9 +8,9 @@
 4. 运行相关检查，服务端运行 `npm run check`；涉及 UI 时检查实际页面及交互。
 5. 对照任务目标检查遗漏，报告结果、验证证据和确实无法验证的事项。
 
-## 后续实现顺序
+## 模块验证顺序
 
-以下是待开发方向，不代表已经实现：
+以下模块已实现，变更后按此顺序验证；具体验收边界见 `docs/verification/MVP.md`：
 
 1. 服务端契约、双 Token 鉴权与 D1 迁移。
 2. 增量 ingest、幂等、删除与同步状态查询。
@@ -25,7 +25,7 @@
 
 新环境执行 `npm ci`，执行 `npm run check` 得到与 CI 相同的服务端检查。
 `npm run build` 仅做 Wrangler dry-run，不部署。
-当前 CI 不包含 iOS 构建，待共享 Xcode 工程和 Scheme 加入后补齐。
+iOS 共享工程和 Scheme 已加入；本机用 README 的 `xcodebuild test` 验证。当前云 CI 仅运行服务端检查，真机 HealthKit 不运行于 CI。
 
 ## 提交与审查
 

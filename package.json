@@ -16,7 +16,8 @@
     "build": "npm run build --workspace server",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "check": "npm run format:check && npm run typecheck && npm test && npm run build"
+    "check": "npm run format:check && npm run typecheck && npm test && npm run build",
+    "deploy": "npm run deploy --workspace server"
   },
   "devDependencies": {
     "prettier": "^3.9.10"

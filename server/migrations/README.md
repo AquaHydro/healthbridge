@@ -1,6 +1,12 @@
-# 数据库迁移
+# D1 迁移
 
-按开发方案落地 D1 时在此添加 `0001_init.sql`，同时配置 Wrangler 的 D1 binding。
-迁移必须使用合成数据验证，覆盖重复写入、删除、时间范围和索引。
-已应用的迁移不得修改，后续变化新增迁移文件。
-当前骨架没有创建本地或远程数据库。
+`0001_init.sql` 创建样本和同步状态表，只包含结构，无真实数据。
+
+在 `server` 目录执行：
+
+```sh
+npx wrangler d1 migrations apply DB --local
+npx wrangler d1 migrations apply DB --remote
+```
+
+先核对账号及 `DB` 绑定。已应用的迁移不可修改，后续变更增加新的序号文件。正常发布使用 `npm run deploy`，先迁移再部署。

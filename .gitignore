@@ -30,3 +30,11 @@ xcuserdata/
 # Installed third-party Skills; sources are recorded in skills-lock.json
 .agents/skills/
 .claude/skills/
+
+# Personal signing material
+*.mobileprovision
+*.provisionprofile
+*.p12
+*.p8
+*.key
+ios/Signing.local.xcconfig

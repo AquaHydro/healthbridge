@@ -1,0 +1,39 @@
+import SwiftUI
+import UIKit
+
+@MainActor final class AppDelegate: NSObject, UIApplicationDelegate {
+  func application(
+    _ application: UIApplication,
+    didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
+  ) -> Bool {
+    AppModel.shared.registerLaunchObservers()
+    return true
+  }
+  func applicationProtectedDataDidBecomeAvailable(_ application: UIApplication) {
+    AppModel.shared.foreground()
+  }
+}
+@main struct HealthBridgeApp: App {
+  @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
+  @Environment(\.scenePhase) private var phase
+  @State private var model = AppModel.shared
+  var body: some Scene {
+    WindowGroup {
+      Group { if model.preferences.onboarded { MainView() } else { OnboardingView() } }
+        .environment(model)
+        .environment(\.locale, Locale(identifier: "zh_CN"))
+        .preferredColorScheme(
+          model.isUITesting && ProcessInfo.processInfo.arguments.contains("--ui-dark") ? .dark : nil
+        )
+        .safeAreaInset(edge: .top) {
+          if model.isUITesting {
+            Text("界面测试 · 合成数据").font(.caption).foregroundStyle(.secondary).dynamicTypeSize(
+              ...DynamicTypeSize.large)
+          }
+        }
+        .onChange(of: phase) { _, value in
+          if value == .active && model.preferences.onboarded { model.foreground() }
+        }
+    }
+  }
+}
